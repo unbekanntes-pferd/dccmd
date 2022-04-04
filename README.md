@@ -14,8 +14,8 @@
 
 
 ## About the project
-_Disclaimer: This is an unofficial client and is not supported by DRACOON._
-This client is CLI tool to perform basic commands in DRACOON and comes with the following functionalities:
+_Disclaimer: This is an unofficial client and is not supported by DRACOON._<br>
+This client is a CLI tool to perform basic commands in DRACOON and comes with the following functionalities:
 
 * Full support for S3 direct up- / download
     * Chunked up- and downloads
