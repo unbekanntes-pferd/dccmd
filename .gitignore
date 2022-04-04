@@ -1,0 +1,12 @@
+# logs and test stuff
+dracoon.log
+test*
+
+# secrets (dev, build)
+.env
+
+# cache
+__pycache__
+
+# builds
+/dist
