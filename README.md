@@ -274,9 +274,9 @@ You can view / manage the configuration for `dccmd` using the relevant commands:
 
 * `dccmd auth` - manage credentials
     * `dccmd auth ls your.dracoon.domain.com` will display if a refresh token has been stored for the provided domain
-    * `dccmd auth register your.dracoon.domain.com` will start the registration process for a client and given domain
     * `dccmd auth rm your-dracoon.domain.com` will remove stored credentials for the provided domain
 * `dccmd client` - manage client
+    * `dccmd client register your.dracoon.domain.com` will start the registration process for a client and given domain
     * `dccmd client ls your.dracoon.domain.com` will display client information for the provided domain
     * `dccmd client rm your-dracoon.domain.com` will remove the stored client config for the provided domain
 * `dccmd crypto` - manage encryption
