@@ -1,3 +1,9 @@
+"""
+DRACOON commands to manage authentication
+Stored refresh token management
+
+"""
+
 # std import
 import sys
 import asyncio
@@ -36,6 +42,7 @@ auth_app = typer.Typer()
 
 
 @auth_app.command()
+#pylint: disable=C0103
 def rm(
     base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)")
 ):
@@ -60,6 +67,7 @@ def rm(
 
 
 @auth_app.command()
+#pylint: disable=C0103
 def ls(
     base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)")
 ):
@@ -94,7 +102,7 @@ def ls(
         if display_user_info:
             dracoon = await login(base_url=parsed_base_url, refresh_token=refresh_token)
             typer.echo(
-                f"Username: {dracoon.user_info.userName} ({dracoon.user_info.firstName} {dracoon.user_info.lastName})"
+            f"Username: {dracoon.user_info.userName} ({dracoon.user_info.firstName} {dracoon.user_info.lastName})"
             )
 
     asyncio.run(_ls())

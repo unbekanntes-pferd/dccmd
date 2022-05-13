@@ -4,7 +4,7 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # std imports
 import sys
@@ -54,16 +54,19 @@ from dccmd.main.auth.credentials import (
 )
 
 from dccmd.main.crypto import crypto_app
+from dccmd.main.users import users_app
 from dccmd.main.crypto.keys import distribute_missing_keys
 from dccmd.main.crypto.util import get_keypair, init_keypair
 from dccmd.main.upload import create_folder_struct, bulk_upload, is_directory, is_file
-from dccmd.main.models.errors import (DCPathParseError, DCClientParseError, ConnectError, ConnectTimeout)
+from dccmd.main.models.errors import (DCPathParseError, DCClientParseError,
+                                      ConnectError)
 
 # initialize CLI app
 app = typer.Typer()
 app.add_typer(typer_instance=client_app, name="client")
 app.add_typer(typer_instance=auth_app, name="auth")
 app.add_typer(typer_instance=crypto_app, name="crypto")
+app.add_typer(typer_instance=users_app, name="users")
 
 
 @app.command()
@@ -206,7 +209,7 @@ def upload(
                     format_error_message(msg="An error ocurred uploading the file.")
                 )
                 sys.exit(2)
-     
+
             try:
                 file_name = parse_file_name(full_path=source_dir_path)
             except DCPathParseError:
@@ -216,7 +219,7 @@ def upload(
         # handle invalid path
         else:
             typer.echo(
-                format_error_message(msg=f"Provided path must be a folder or file. ({source_dir_path})")
+            format_error_message(msg=f"Provided path must be a folder or file. ({source_dir_path})")
             )
 
         # node id must be from parent room if folder
@@ -384,7 +387,7 @@ def mkroom(
                 )
             )
             sys.exit(1)
-        except ConnectTimeout:
+        except TimeoutError:
             typer.echo(
                 format_error_message(
                     msg="Connection timeout - room could not be created."
@@ -486,7 +489,7 @@ def rm(
                 )
             )
             sys.exit(1)
-        except ConnectTimeout:
+        except TimeoutError:
             typer.echo(
                 format_error_message(
                     msg="Connection timeout - room could not be created."
@@ -584,7 +587,7 @@ def ls(
             await dracoon.logout()
             typer.echo(format_error_message(msg="Error listing nodes."))
             sys.exit(1)
-        except ConnectTimeout:
+        except TimeoutError:
             typer.echo(
                 format_error_message(
                     msg="Connection timeout - could not list nodes."
@@ -628,7 +631,7 @@ def ls(
                     await dracoon.logout()
                     typer.echo(format_error_message(msg="Error listing nodes."))
                     sys.exit(1)
-                except ConnectTimeout:
+                except TimeoutError:
                     typer.echo(
                         format_error_message(
                             msg="Connection timeout - could not list nodes."
@@ -711,7 +714,7 @@ def download(
         if node_info.type != NodeType.file:
             typer.echo(format_error_message(msg=f"Node not a file ({parsed_path})"))
             sys.exit(1)
-    
+
         if node_info and node_info.isEncrypted is True:
 
             crypto_secret = get_crypto_credentials(base_url)
@@ -729,12 +732,12 @@ def download(
         # to do: replace with handling via PermissionError
         except UnboundLocalError:
             typer.echo(
-                format_error_message(msg=f"Insufficient permissions on target path ({target_dir_path})")
+            format_error_message(msg=f"Insufficient permissions on target path ({target_dir_path})")
             )
             sys.exit(1)
         except InvalidPathError:
             typer.echo(
-                format_error_message(msg=f"Path must be a folder ({target_dir_path})")
+            format_error_message(msg=f"Path must be a folder ({target_dir_path})")
             )
             sys.exit(1)
         except InvalidFileError:
@@ -760,7 +763,7 @@ def download(
                 )
             )
             sys.exit(1)
-        except ConnectTimeout:
+        except TimeoutError:
             typer.echo(
                 format_error_message(
                     msg="Connection timeout - could not download file."
@@ -774,6 +777,11 @@ def download(
                 )
             )
             sys.exit(1)
+        except KeyboardInterrupt:
+            await dracoon.logout()
+            typer.echo(
+            f'{format_success_message(f"Download canceled ({file_name}).")}'
+        )
 
         typer.echo(
             f'{format_success_message(f"File {file_name} downloaded to {target_dir_path}.")}'

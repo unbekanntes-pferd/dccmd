@@ -12,6 +12,9 @@ from dracoon import DRACOON, OAuth2ConnectionType
 from dracoon.client import DRACOONConnection
 from dracoon.errors import HTTPUnauthorizedError, HTTPStatusError
 
+
+from dccmd import __version__ as dccmd_version
+from dccmd import __name__ as dccmd_name
 from dccmd.main.util import (format_error_message, format_success_message,
                              graceful_exit, parse_base_url)
 from dccmd.main.models.errors import DCPathParseError, DCClientParseError
@@ -59,7 +62,11 @@ async def login(
         client_secret=client_secret,
         log_level=log_level,
         log_stream=debug,
+        raise_on_err=True
     )
+
+    dracoon_user_agent = dracoon.client.http.headers["User-Agent"]
+    dracoon.client.http.headers["User-Agent"] = f"{dccmd_name}|{dccmd_version}|{dracoon_user_agent}"
 
     # password flow
     if cli_mode:

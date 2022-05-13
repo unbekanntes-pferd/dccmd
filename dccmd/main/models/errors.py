@@ -1,9 +1,8 @@
 """
 Errors thrown in dccmd
 """
-
-from httpx import ConnectError, ConnectTimeout
-
+# re-import
+from httpx import ConnectError
 
 # error parsing a DRACOON base url
 class DCPathParseError(Exception):
