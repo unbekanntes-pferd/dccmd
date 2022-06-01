@@ -9,7 +9,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 typer = "^0.4.0"
-dracoon = "^1.3.1"
+dracoon = "^1.4.1"
 keyring = "^23.5.0"
 SecretStorage = "^3.3.1"
 
@@ -22,3 +22,6 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 dccmd = "dccmd:app"
+
+[tool.pylint.'MESSAGES CONTROL']
+extension-pkg-whitelist = "pydantic"

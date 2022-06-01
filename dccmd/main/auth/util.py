@@ -10,7 +10,7 @@ import typer
 import httpx
 from dracoon import DRACOON, OAuth2ConnectionType
 from dracoon.client import DRACOONConnection
-from dracoon.errors import HTTPUnauthorizedError, HTTPStatusError
+from dracoon.errors import HTTPUnauthorizedError, HTTPStatusError, HTTPBadRequestError
 
 
 from dccmd import __version__ as dccmd_version
@@ -70,13 +70,27 @@ async def login(
 
     # password flow
     if cli_mode:
-        dracoon = await _login_password_flow(base_url, dracoon, username, password)
+        try:
+            dracoon = await _login_password_flow(base_url, dracoon, username, password)
+        except HTTPUnauthorizedError:
+            typer.echo(format_error_message(msg='Wrong username/password.'))
+            sys.exit(1)
     # refresh token
     elif refresh_token:
-        dracoon = await _login_refresh_token(base_url, dracoon, refresh_token)
+        try:
+            dracoon = await _login_refresh_token(base_url, dracoon, refresh_token)
+        # invalid refresh token
+        except HTTPBadRequestError:
+            dracoon = await _login_prompt(base_url, dracoon)
+
     # auth code flow
     else:
-        dracoon = await _login_prompt(base_url, dracoon)
+        try:
+            dracoon = await _login_prompt(base_url, dracoon)
+        except HTTPBadRequestError:
+            typer.echo(format_error_message(msg='Invalid authorization code.'))
+            sys.exit(1)
+
 
     return dracoon
 

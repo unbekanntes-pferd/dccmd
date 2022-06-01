@@ -787,6 +787,8 @@ def download(
             f'{format_success_message(f"File {file_name} downloaded to {target_dir_path}.")}'
         )
 
+        await dracoon.logout()
+
     asyncio.run(_download())
 
 
