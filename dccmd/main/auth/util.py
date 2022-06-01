@@ -10,8 +10,11 @@ import typer
 import httpx
 from dracoon import DRACOON, OAuth2ConnectionType
 from dracoon.client import DRACOONConnection
-from dracoon.errors import HTTPUnauthorizedError, HTTPStatusError
+from dracoon.errors import HTTPUnauthorizedError, HTTPStatusError, HTTPBadRequestError
 
+
+from dccmd import __version__ as dccmd_version
+from dccmd import __name__ as dccmd_name
 from dccmd.main.util import (format_error_message, format_success_message,
                              graceful_exit, parse_base_url)
 from dccmd.main.models.errors import DCPathParseError, DCClientParseError
@@ -59,17 +62,35 @@ async def login(
         client_secret=client_secret,
         log_level=log_level,
         log_stream=debug,
+        raise_on_err=True
     )
+
+    dracoon_user_agent = dracoon.client.http.headers["User-Agent"]
+    dracoon.client.http.headers["User-Agent"] = f"{dccmd_name}|{dccmd_version}|{dracoon_user_agent}"
 
     # password flow
     if cli_mode:
-        dracoon = await _login_password_flow(base_url, dracoon, username, password)
+        try:
+            dracoon = await _login_password_flow(base_url, dracoon, username, password)
+        except HTTPUnauthorizedError:
+            typer.echo(format_error_message(msg='Wrong username/password.'))
+            sys.exit(1)
     # refresh token
     elif refresh_token:
-        dracoon = await _login_refresh_token(base_url, dracoon, refresh_token)
+        try:
+            dracoon = await _login_refresh_token(base_url, dracoon, refresh_token)
+        # invalid refresh token
+        except HTTPBadRequestError:
+            dracoon = await _login_prompt(base_url, dracoon)
+
     # auth code flow
     else:
-        dracoon = await _login_prompt(base_url, dracoon)
+        try:
+            dracoon = await _login_prompt(base_url, dracoon)
+        except HTTPBadRequestError:
+            typer.echo(format_error_message(msg='Invalid authorization code.'))
+            sys.exit(1)
+
 
     return dracoon
 
