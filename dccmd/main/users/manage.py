@@ -15,7 +15,7 @@ from dracoon.errors import (
     HTTPConflictError,
     HTTPBadRequestError,
     HTTPForbiddenError,
-    HTTPStatusError,
+    DRACOONHttpError,
 )
 from pydantic import BaseModel
 import typer
@@ -182,7 +182,7 @@ async def create_users(
             continue
         except HTTPBadRequestError:
             continue
-        except HTTPStatusError:
+        except DRACOONHttpError:
             continue
 
 
@@ -233,7 +233,7 @@ async def delete_user(dracoon: DRACOON, user_id: int):
                 )
             )
         sys.exit(1)
-    except HTTPStatusError:
+    except DRACOONHttpError:
         await dracoon.logout()
         typer.echo(
             format_error_message(
@@ -262,7 +262,7 @@ async def get_users(dracoon: DRACOON, search_string: str = ''):
                 )
             )
         sys.exit(1)
-    except HTTPStatusError:
+    except DRACOONHttpError:
         await dracoon.logout()
         typer.echo(
             format_error_message(
@@ -297,7 +297,7 @@ async def find_user_by_username(dracoon: DRACOON, user_name: str):
                 )
             )
         sys.exit(1)
-    except HTTPStatusError:
+    except DRACOONHttpError:
         await dracoon.logout()
         typer.echo(
             format_error_message(

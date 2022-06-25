@@ -14,7 +14,7 @@ import typer
 import httpx
 from dracoon import DRACOON, OAuth2ConnectionType
 from dracoon.client import DRACOONConnection
-from dracoon.errors import HTTPUnauthorizedError, HTTPStatusError, HTTPNotFoundError
+from dracoon.errors import HTTPUnauthorizedError, DRACOONHttpError, HTTPNotFoundError
 
 # internal imports
 from .credentials import (

@@ -9,8 +9,7 @@ import sys
 import typer
 import httpx
 from dracoon import DRACOON, OAuth2ConnectionType
-from dracoon.client import DRACOONConnection
-from dracoon.errors import HTTPUnauthorizedError, HTTPStatusError, HTTPBadRequestError
+from dracoon.errors import HTTPUnauthorizedError, DRACOONHttpError, HTTPBadRequestError
 
 
 from dccmd import __version__ as dccmd_version
@@ -64,7 +63,8 @@ async def login(
         log_stream=debug,
         raise_on_err=True
     )
-
+    
+    # set custom user agent
     dracoon_user_agent = dracoon.client.http.headers["User-Agent"]
     dracoon.client.http.headers["User-Agent"] = f"{dccmd_name}|{dccmd_version}|{dracoon_user_agent}"
 
@@ -75,6 +75,9 @@ async def login(
         except HTTPUnauthorizedError:
             typer.echo(format_error_message(msg='Wrong username/password.'))
             sys.exit(1)
+        except DRACOONHttpError:
+            typer.echo(format_error_message(msg='An error ocurred during login'))
+            sys.exit(1)       
     # refresh token
     elif refresh_token:
         try:
@@ -82,6 +85,9 @@ async def login(
         # invalid refresh token
         except HTTPBadRequestError:
             dracoon = await _login_prompt(base_url, dracoon)
+        except DRACOONHttpError:
+            typer.echo(format_error_message(msg='An error ocurred during login'))
+            sys.exit(1)
 
     # auth code flow
     else:
@@ -89,6 +95,9 @@ async def login(
             dracoon = await _login_prompt(base_url, dracoon)
         except HTTPBadRequestError:
             typer.echo(format_error_message(msg='Invalid authorization code.'))
+            sys.exit(1)
+        except DRACOONHttpError:
+            typer.echo(format_error_message(msg='An error ocurred during login'))
             sys.exit(1)
 
 
@@ -152,12 +161,10 @@ async def _login_password_flow(
             sys.exit(1)
         else:
             typer.echo(format_error_message(msg="Wrong username or password."))
-    except HTTPStatusError:
+    except DRACOONHttpError:
         await graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="Login failed."))
-    except httpx.ConnectError:
-        await graceful_exit(dracoon=dracoon)
-        typer.echo(format_error_message(msg="Login failed."))
+
 
     save_creds = typer.confirm("Save credentials?", abort=False, default=True)
 
@@ -179,7 +186,7 @@ async def _login_prompt(base_url: str, dracoon: DRACOON) -> DRACOON:
     except HTTPUnauthorizedError:
         graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="Wrong authorization code."))
-    except httpx.ConnectError:
+    except DRACOONHttpError:
         graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="Login failed (check authorization code)."))
 
@@ -196,9 +203,8 @@ async def _login_prompt(base_url: str, dracoon: DRACOON) -> DRACOON:
 async def _login_refresh_token(
     base_url: str, dracoon: DRACOON, refresh_token: str
 ) -> DRACOON:
-    dracoon.client.connection = DRACOONConnection(None, None, None, refresh_token, None)
     try:
-        await dracoon.connect(connection_type=OAuth2ConnectionType.refresh_token)
+        await dracoon.connect(connection_type=OAuth2ConnectionType.refresh_token, refresh_token=refresh_token)
     except HTTPUnauthorizedError as err:
 
         await graceful_exit(dracoon=dracoon)
@@ -215,12 +221,10 @@ async def _login_refresh_token(
         else:
             delete_credentials(base_url=base_url)
             typer.echo(format_error_message(msg="Refresh token expired."))
-    except HTTPStatusError:
+    except DRACOONHttpError:
         graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="Login failed."))
-    except httpx.ConnectError:
-        graceful_exit(dracoon=dracoon)
-        typer.echo(format_error_message(msg="Login failed."))
+
 
     # store new refresh token
     store_credentials(
@@ -245,7 +249,7 @@ async def is_dracoon_url(base_url: str) -> bool:
             res.raise_for_status()
         except httpx.ConnectError:
             return False
-        except httpx.HTTPStatusError:
+        except DRACOONHttpError:
             return False
 
     return True

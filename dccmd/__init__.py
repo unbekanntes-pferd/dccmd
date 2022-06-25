@@ -4,7 +4,7 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # std imports
 import sys
@@ -16,9 +16,9 @@ from datetime import datetime
 from dracoon import DRACOON, OAuth2ConnectionType
 from dracoon.nodes.models import NodeType
 from dracoon.errors import (
+    DRACOONHttpError,
     HTTPConflictError,
     HTTPForbiddenError,
-    HTTPStatusError,
     InvalidPathError,
     InvalidFileError,
     FileConflictError,
@@ -58,6 +58,7 @@ from dccmd.main.users import users_app
 from dccmd.main.crypto.keys import distribute_missing_keys
 from dccmd.main.crypto.util import get_keypair, init_keypair
 from dccmd.main.upload import create_folder_struct, bulk_upload, is_directory, is_file
+from dccmd.main.models import DCTransfer, DCTransferList
 from dccmd.main.models.errors import (DCPathParseError, DCClientParseError,
                                       ConnectError)
 
@@ -203,7 +204,7 @@ def upload(
                     format_error_message(msg=f"Target path not found. ({target_path})")
                 )
                 sys.exit(2)
-            except HTTPStatusError:
+            except DRACOONHttpError:
                 await dracoon.logout()
                 typer.echo(
                     format_error_message(msg="An error ocurred uploading the file.")
@@ -296,7 +297,7 @@ def mkdir(
                 )
             )
             sys.exit(1)
-        except HTTPStatusError:
+        except DRACOONHttpError:
             await dracoon.logout()
             typer.echo(
                 format_error_message(
@@ -379,7 +380,7 @@ def mkroom(
                 )
             )
             sys.exit(1)
-        except HTTPStatusError:
+        except DRACOONHttpError:
             await dracoon.logout()
             typer.echo(
                 format_error_message(
@@ -481,7 +482,7 @@ def rm(
                 format_error_message(msg="Insufficient permissions (delete required).")
             )
             sys.exit(1)
-        except HTTPStatusError:
+        except DRACOONHttpError:
             await dracoon.logout()
             typer.echo(
                 format_error_message(
@@ -583,7 +584,7 @@ def ls(
                 format_error_message(msg="Insufficient permissions (delete required).")
             )
             sys.exit(1)
-        except HTTPStatusError:
+        except DRACOONHttpError:
             await dracoon.logout()
             typer.echo(format_error_message(msg="Error listing nodes."))
             sys.exit(1)
@@ -627,7 +628,7 @@ def ls(
                         )
                     )
                     sys.exit(1)
-                except HTTPStatusError:
+                except DRACOONHttpError:
                     await dracoon.logout()
                     typer.echo(format_error_message(msg="Error listing nodes."))
                     sys.exit(1)
@@ -722,12 +723,15 @@ def download(
                 dracoon=dracoon, base_url=base_url, crypto_secret=crypto_secret
             )
 
+        transfer = DCTransferList(total=node_info.size, file_count=1)
+        download_job = DCTransfer(transfer=transfer)
+
         try:
             await dracoon.download(
                 file_path=parsed_path,
                 target_path=target_dir_path,
-                display_progress=True,
                 raise_on_err=True,
+                callback_fn=download_job.update
             )
         # to do: replace with handling via PermissionError
         except UnboundLocalError:
@@ -751,7 +755,7 @@ def download(
                 )
             )
             sys.exit(1)
-        except HTTPStatusError:
+        except DRACOONHttpError:
             await dracoon.logout()
             typer.echo(format_error_message(msg="Error downloading file."))
             sys.exit(1)
