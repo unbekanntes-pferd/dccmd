@@ -38,7 +38,7 @@ class DCTransfer(TransferJob):
 
     def update(self, val: int, total: int = None):
         """ callback function to track progress """
-        if total is not None and val is 0:
+        if total is not None and val == 0:
             self.total += total
         
         self.update_progress(val)

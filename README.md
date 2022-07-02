@@ -42,7 +42,7 @@ The tool is built on top of dracoon, an async API wrapper for DRACOON based on h
 The project is managed with poetry (dependencies, release build and publishing).
 
 ## Getting Started
-In order to get started, download the latest tarball from Github:
+In order to get started, download the latest tarball from Github or install dccmd from pip:
 [Releases]()
 
 ### Prerequisites
@@ -265,7 +265,60 @@ To download a file, use the `download` command:
 ```bash
 dccmd download your-dracoon.domain.com/your/cool-file.mp4 /target/directory
 ```
-*Note: Currently, the download of a container (room, folder) is not supported.*
+
+To download a room or a folder, use the `download` command with `--recursive` (`-r`) flag:
+
+```bash
+dccmd download -r your-dracoon.domain.com/your/cool-folder /target/directory
+```
+
+#### Advanced usage
+If you download folders recursively, you might encounter performance issues, specifically when downloading many small files. 
+You can therefore adjust concurrent file uploads via the `--velocity` (`-v`) flag:
+
+```bash
+dccmd upload -r /path/to/folder your-dracoon.domain.com/ -v 3
+```
+The default value is 2 - it does not coincide with real request value.<br>
+Maximum (although not recommended) value is 10. Entering higher numbers will result in max value use.<br>
+Minimum value is 1 - this will not download a folder per file but is the minimum concurrent request value. Entering lower numbers will result in min value use.
+
+### User operations
+
+You can list, edit and import users with relevant `dccmd users` command:
+
+* csv-import  Add a list of users to DRACOON from a CSV file
+* ls          Get a list of users in DRACOON
+* rm          Delete a user
+
+#### Importing users
+
+You can import users by using the `csv-import` command and providing a path to the csv file:
+
+```bash
+dccmd users csv-import /path/to/users.csv your-dracoon.domain.com/
+```
+
+#### Listing users
+
+You can list all users using the `ls` command:
+
+```bash
+dccmd users ls your-dracoon.domain.com/
+```
+
+You can get all users also as csv format by using the `--csv` flag:
+
+```bash
+dccmd users ls your-dracoon.domain.com/ --csv > users.csv
+```
+
+#### Deleting users
+
+You can delete a user by providing the username:
+```bash
+dccmd users rm your-dracoon.domain.com/ user123
+```
 
 
 ## Configuration / administration

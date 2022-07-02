@@ -26,6 +26,8 @@ from .credentials import (
     get_credentials,
 )
 
+DEFAULT_TIMEOUT_CONFIG = httpx.Timeout(None, connect=None, read=None)
+
 async def login(
     base_url: str,
     refresh_token: str = None,
@@ -61,12 +63,18 @@ async def login(
         client_secret=client_secret,
         log_level=log_level,
         log_stream=debug,
+        log_file_out=True,
         raise_on_err=True
     )
     
     # set custom user agent
     dracoon_user_agent = dracoon.client.http.headers["User-Agent"]
     dracoon.client.http.headers["User-Agent"] = f"{dccmd_name}|{dccmd_version}|{dracoon_user_agent}"
+
+    # set custom client with no timeout, up- and downloader with same client !!!
+    dracoon.client.http = httpx.AsyncClient(headers=dracoon.client.headers, timeout=DEFAULT_TIMEOUT_CONFIG)
+    dracoon.client.uploader = httpx.AsyncClient(timeout=DEFAULT_TIMEOUT_CONFIG)
+    dracoon.client.downloader = dracoon.client.uploader
 
     # password flow
     if cli_mode:
