@@ -134,7 +134,7 @@ async def get_nodes(dracoon: DRACOON, parent_id: int, node_type: NodeType, depth
     return node_list
 
 
-async def create_download_list(dracoon: DRACOON, parent_id: int, target_path: str) -> DownloadList:
+async def create_download_list(dracoon: DRACOON, node_info: Node, target_path: str) -> DownloadList:
     """ returns a list of files and folders for bulk download operations """
 
     target_path_check = Path(target_path)
@@ -142,13 +142,13 @@ async def create_download_list(dracoon: DRACOON, parent_id: int, target_path: st
         raise InvalidPathError()
 
     # get all files and folders within path
-    all_files = await get_nodes(dracoon=dracoon, parent_id=parent_id, node_type=NodeType.FILE)
-    all_folders = await get_nodes(dracoon=dracoon, parent_id=parent_id, node_type=NodeType.FOLDER)
-    node_info = await dracoon.nodes.get_node(node_id=parent_id)
-    
-    # only consider those with authParentId of the parent room
-    all_files.items = [item for item in all_files.items if item.authParentId == parent_id]
-    all_folders.items = [item for item in all_folders.items if item.authParentId == parent_id]
+    all_files = await get_nodes(dracoon=dracoon, parent_id=node_info.id, node_type=NodeType.FILE)
+    all_folders = await get_nodes(dracoon=dracoon, parent_id=node_info.id, node_type=NodeType.FOLDER)
+
+    # only consider those with authParentId of the parent room if the source is a room (exclude sub rooms)
+    if node_info.type == NodeType.ROOM:
+        all_files.items = [item for item in all_files.items if item.authParentId == node_info.id]
+        all_folders.items = [item for item in all_folders.items if item.authParentId == node_info.id]
 
     return DownloadList(file_list=all_files, folder_list=all_folders, node=node_info, target_path=target_path)
 

@@ -299,6 +299,20 @@ You can import users by using the `csv-import` command and providing a path to t
 dccmd users csv-import /path/to/users.csv your-dracoon.domain.com/
 ```
 
+The csv file must contain a header and should include the following attributes:
+
+* first name
+* last name
+* email 
+* login (optional)
+
+By default, local users are created - if you want to import oidc users, you need pass the oidc config id:
+
+```bash
+#example with OIDC config 5
+dccmd users csv-import /path/to/users.csv your-dracoon.domain.com/ 5
+```
+
 #### Listing users
 
 You can list all users using the `ls` command:
@@ -311,6 +325,13 @@ You can get all users also as csv format by using the `--csv` flag:
 
 ```bash
 dccmd users ls your-dracoon.domain.com/ --csv > users.csv
+```
+
+To find a user, you can pass a search string to search for either first name, last name or user name (search string applies to all):
+
+```bash
+# will return all users with either first name, last name or user name containing 'yourname'
+dccmd users ls your-dracoon.domain.com/ yourname
 ```
 
 #### Deleting users

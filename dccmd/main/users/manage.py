@@ -250,7 +250,7 @@ async def get_users(dracoon: DRACOON, search_string: str = ''):
         search_filter = None
     else:
         search_filter = f'userName:cn:{search_string}|firstName:cn:{search_string}|lastName:cn:{search_string}'
-        search_filter = parse.quote(search_filter)
+        #search_filter = parse.quote(search_filter)
 
     try:
         user_list = await dracoon.users.get_users(filter=search_filter, offset=0)

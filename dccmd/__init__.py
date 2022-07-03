@@ -737,9 +737,9 @@ def download(
                 dracoon=dracoon, base_url=base_url, crypto_secret=crypto_secret
             )
         
-        is_container = node_info == NodeType.folder or node_info.type == NodeType.room
+        is_container = node_info.type == NodeType.folder or node_info.type == NodeType.room
         is_file_path = node_info.type == NodeType.file
-        
+
         if is_container and not recursive:
             typer.echo(
                 format_error_message(
@@ -748,7 +748,7 @@ def download(
             )
         elif is_container and recursive:
             try:
-                download_list = await create_download_list(dracoon=dracoon, parent_id=node_info.id,
+                download_list = await create_download_list(dracoon=dracoon, node_info=node_info,
                                                            target_path=target_dir_path)
             except InvalidPathError:
                 typer.echo(
@@ -756,9 +756,9 @@ def download(
                         msg=f"Target path does not exist ({target_dir_path})"
                     )
                 )
-                sys.exit(1)
-            finally:
                 await dracoon.logout()
+                sys.exit(1)
+
             try:
                 await bulk_download(dracoon=dracoon, download_list=download_list, velocity=velocity)
             except FileConflictError:

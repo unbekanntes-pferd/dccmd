@@ -31,6 +31,7 @@ def csv_import(
         help="Full path to a CSV file containing user data to bulk import",
     ),
     target_path: str = typer.Argument(..., help="DRACOON url to import users to"),
+    oidc_id: int = typer.Argument(None, help="Numeric id of OIDC config"),
     cli_mode: bool = typer.Option(
         False, help="When active, accepts username and password"
     ),
@@ -59,7 +60,7 @@ def csv_import(
 
         user_list = parse_csv(source_path=source_path)
 
-        await create_users(dracoon=dracoon, user_list=user_list)
+        await create_users(dracoon=dracoon, user_list=user_list, oidc_id=oidc_id)
         await dracoon.logout()
 
     asyncio.run(_import_users())
