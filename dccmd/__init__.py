@@ -4,7 +4,7 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # std imports
 import sys
@@ -16,9 +16,9 @@ from datetime import datetime
 from dracoon import DRACOON, OAuth2ConnectionType
 from dracoon.nodes.models import NodeType
 from dracoon.errors import (
+    DRACOONHttpError,
     HTTPConflictError,
     HTTPForbiddenError,
-    HTTPStatusError,
     InvalidPathError,
     InvalidFileError,
     FileConflictError,
@@ -58,15 +58,17 @@ from dccmd.main.users import users_app
 from dccmd.main.crypto.keys import distribute_missing_keys
 from dccmd.main.crypto.util import get_keypair, init_keypair
 from dccmd.main.upload import create_folder_struct, bulk_upload, is_directory, is_file
+from dccmd.main.download import create_download_list, bulk_download
+from dccmd.main.models import DCTransfer, DCTransferList
 from dccmd.main.models.errors import (DCPathParseError, DCClientParseError,
                                       ConnectError)
 
 # initialize CLI app
 app = typer.Typer()
-app.add_typer(typer_instance=client_app, name="client")
-app.add_typer(typer_instance=auth_app, name="auth")
-app.add_typer(typer_instance=crypto_app, name="crypto")
-app.add_typer(typer_instance=users_app, name="users")
+app.add_typer(typer_instance=client_app, name="client", help="Manage client info")
+app.add_typer(typer_instance=auth_app, name="auth", help="Manage authentication credentials")
+app.add_typer(typer_instance=crypto_app, name="crypto", help="Manage crypto credentials")
+app.add_typer(typer_instance=users_app, name="users", help="Manage users")
 
 
 @app.command()
@@ -203,7 +205,7 @@ def upload(
                     format_error_message(msg=f"Target path not found. ({target_path})")
                 )
                 sys.exit(2)
-            except HTTPStatusError:
+            except DRACOONHttpError:
                 await dracoon.logout()
                 typer.echo(
                     format_error_message(msg="An error ocurred uploading the file.")
@@ -296,7 +298,7 @@ def mkdir(
                 )
             )
             sys.exit(1)
-        except HTTPStatusError:
+        except DRACOONHttpError:
             await dracoon.logout()
             typer.echo(
                 format_error_message(
@@ -379,7 +381,7 @@ def mkroom(
                 )
             )
             sys.exit(1)
-        except HTTPStatusError:
+        except DRACOONHttpError:
             await dracoon.logout()
             typer.echo(
                 format_error_message(
@@ -481,7 +483,7 @@ def rm(
                 format_error_message(msg="Insufficient permissions (delete required).")
             )
             sys.exit(1)
-        except HTTPStatusError:
+        except DRACOONHttpError:
             await dracoon.logout()
             typer.echo(
                 format_error_message(
@@ -530,6 +532,9 @@ def ls(
     ),
     debug: bool = typer.Option(
         False, help="When active, sets log level to DEBUG and streams log"
+    ),
+    all_items: bool = typer.Option(
+        False, help="When active, returns all items without prompt"
     ),
     username: str = typer.Argument(
         None, help="Username to log in to DRACOON - only works with active cli mode"
@@ -583,7 +588,7 @@ def ls(
                 format_error_message(msg="Insufficient permissions (delete required).")
             )
             sys.exit(1)
-        except HTTPStatusError:
+        except DRACOONHttpError:
             await dracoon.logout()
             typer.echo(format_error_message(msg="Error listing nodes."))
             sys.exit(1)
@@ -605,9 +610,12 @@ def ls(
 
         # handle more than 500 items
         if nodes.range.total > 500:
-            show_all = typer.confirm(
+            if not all_items: 
+                show_all = typer.confirm(
                 f"More than 500 nodes in {parsed_path} - display all?"
             )
+            else:
+                show_all = all_items
 
             if not show_all:
                 typer.echo(f"{nodes.range.total} nodes – only 500 displayed.")
@@ -627,7 +635,7 @@ def ls(
                         )
                     )
                     sys.exit(1)
-                except HTTPStatusError:
+                except DRACOONHttpError:
                     await dracoon.logout()
                     typer.echo(format_error_message(msg="Error listing nodes."))
                     sys.exit(1)
@@ -646,9 +654,9 @@ def ls(
                     )
                     sys.exit(1)
 
-        if long_list and parent_id is not 0 and human_readable:
+        if long_list and parent_id != 0 and human_readable:
             typer.echo(f"total {to_readable_size(parent_node.size)}")
-        elif long_list and parent_id is not 0:
+        elif long_list and parent_id != 0:
             typer.echo(f"total {parent_node.size}")
 
         for node in nodes.items:
@@ -677,6 +685,15 @@ def download(
     ),
     debug: bool = typer.Option(
         False, help="When active, sets log level to DEBUG and streams log"
+    ),
+    recursive: bool = typer.Option(
+        False, "--recursive", "-r", help="Download a folder / room content recursively"
+    ),
+    velocity: int = typer.Option(
+        2,
+        "--velocity",
+        "-v",
+        help="Concurrent requests factor (1: slow, 10: max)",
     ),
     username: str = typer.Argument(
         None, help="Username to log in to DRACOON - only works with active cli mode"
@@ -711,9 +728,7 @@ def download(
         if not node_info:
             typer.echo(format_error_message(msg=f"Node not found ({parsed_path})."))
             sys.exit(1)
-        if node_info.type != NodeType.file:
-            typer.echo(format_error_message(msg=f"Node not a file ({parsed_path})"))
-            sys.exit(1)
+
 
         if node_info and node_info.isEncrypted is True:
 
@@ -721,73 +736,124 @@ def download(
             await init_keypair(
                 dracoon=dracoon, base_url=base_url, crypto_secret=crypto_secret
             )
+        
+        is_container = node_info.type == NodeType.folder or node_info.type == NodeType.room
+        is_file_path = node_info.type == NodeType.file
 
-        try:
-            await dracoon.download(
-                file_path=parsed_path,
-                target_path=target_dir_path,
-                display_progress=True,
-                raise_on_err=True,
-            )
-        # to do: replace with handling via PermissionError
-        except UnboundLocalError:
-            typer.echo(
-            format_error_message(msg=f"Insufficient permissions on target path ({target_dir_path})")
-            )
-            sys.exit(1)
-        except InvalidPathError:
-            typer.echo(
-            format_error_message(msg=f"Path must be a folder ({target_dir_path})")
-            )
-            sys.exit(1)
-        except InvalidFileError:
-            await dracoon.logout()
-            typer.echo(format_error_message(msg=f"File does not exist ({parsed_path})"))
-            sys.exit(1)
-        except FileConflictError:
+        if is_container and not recursive:
             typer.echo(
                 format_error_message(
-                    msg=f"File already exists on target path ({target_dir_path})"
+                    msg="Folder or room can only be downloaded via recursive (-r) flag."
                 )
             )
-            sys.exit(1)
-        except HTTPStatusError:
-            await dracoon.logout()
-            typer.echo(format_error_message(msg="Error downloading file."))
-            sys.exit(1)
-        except PermissionError:
-            await dracoon.logout()
-            typer.echo(
-                format_error_message(
-                    msg=f"Cannot write on target path ({target_dir_path})"
+        elif is_container and recursive:
+            try:
+                download_list = await create_download_list(dracoon=dracoon, node_info=node_info,
+                                                           target_path=target_dir_path)
+            except InvalidPathError:
+                typer.echo(
+                    format_error_message(
+                        msg=f"Target path does not exist ({target_dir_path})"
+                    )
                 )
-            )
-            sys.exit(1)
-        except TimeoutError:
-            typer.echo(
-                format_error_message(
-                    msg="Connection timeout - could not download file."
-                )
-            )
-            sys.exit(1)
-        except ConnectError:
-            typer.echo(
-                format_error_message(
-                    msg="Connection error - could not download file."
-                )
-            )
-            sys.exit(1)
-        except KeyboardInterrupt:
-            await dracoon.logout()
-            typer.echo(
-            f'{format_success_message(f"Download canceled ({file_name}).")}'
-        )
+                await dracoon.logout()
+                sys.exit(1)
 
-        typer.echo(
-            f'{format_success_message(f"File {file_name} downloaded to {target_dir_path}.")}'
-        )
+            
 
-        await dracoon.logout()
+            try:
+                await bulk_download(dracoon=dracoon, download_list=download_list, velocity=velocity)
+            except FileConflictError:
+                typer.echo(
+                    format_error_message(
+                        msg=f"File already exists on target path ({target_dir_path})"
+                    )
+                )
+                sys.exit(1)
+            except DRACOONHttpError:
+                await dracoon.logout()
+                typer.echo(format_error_message(msg="Error downloading file."))
+                sys.exit(1)
+            except PermissionError:
+                await dracoon.logout()
+                typer.echo(
+                    format_error_message(
+                        msg=f"Cannot write on target path ({target_dir_path})"
+                    )
+                )
+            finally:
+                await dracoon.logout()
+        elif is_file_path:
+            transfer = DCTransferList(total=node_info.size, file_count=1)
+            download_job = DCTransfer(transfer=transfer)
+
+            try:
+                await dracoon.download(
+                    file_path=parsed_path,
+                    target_path=target_dir_path,
+                    raise_on_err=True,
+                    callback_fn=download_job.update
+                )
+            # to do: replace with handling via PermissionError
+            except UnboundLocalError:
+                typer.echo(
+                format_error_message(msg=f"Insufficient permissions on target path ({target_dir_path})")
+                )
+                sys.exit(1)
+            except InvalidPathError:
+                typer.echo(
+                format_error_message(msg=f"Path must be a folder ({target_dir_path})")
+                )
+                sys.exit(1)
+            except InvalidFileError:
+                await dracoon.logout()
+                typer.echo(format_error_message(msg=f"File does not exist ({parsed_path})"))
+                sys.exit(1)
+            except FileConflictError:
+                typer.echo(
+                    format_error_message(
+                        msg=f"File already exists on target path ({target_dir_path})"
+                    )
+                )
+                sys.exit(1)
+            except DRACOONHttpError:
+                await dracoon.logout()
+                typer.echo(format_error_message(msg="Error downloading file."))
+                sys.exit(1)
+            except PermissionError:
+                await dracoon.logout()
+                typer.echo(
+                    format_error_message(
+                        msg=f"Cannot write on target path ({target_dir_path})"
+                    )
+                )
+                sys.exit(1)
+            except TimeoutError:
+                typer.echo(
+                    format_error_message(
+                        msg="Connection timeout - could not download file."
+                    )
+                )
+                sys.exit(1)
+            except ConnectError:
+                typer.echo(
+                    format_error_message(
+                        msg="Connection error - could not download file."
+                    )
+                )
+                sys.exit(1)
+            except KeyboardInterrupt:
+                await dracoon.logout()
+                typer.echo(
+                f'{format_success_message(f"Download canceled ({file_name}).")}'
+            )
+            finally:
+                await dracoon.logout()
+
+
+            typer.echo(
+                f'{format_success_message(f"File {file_name} downloaded to {target_dir_path}.")}'
+            )
 
     asyncio.run(_download())
 

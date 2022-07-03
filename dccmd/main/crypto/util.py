@@ -5,7 +5,7 @@ import sys
 import typer
 
 from dracoon import DRACOON
-from dracoon.errors import HTTPNotFoundError, HTTPStatusError
+from dracoon.errors import HTTPNotFoundError, DRACOONHttpError
 
 from dccmd.main.util import graceful_exit, format_error_message
 from dccmd.main.auth.credentials import store_crypto_credentials
@@ -27,7 +27,7 @@ async def get_keypair(dracoon: DRACOON, crypto_secret: str):
             )
         )
         sys.exit(2)
-    except HTTPStatusError:
+    except DRACOONHttpError:
         await graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="An error ocurred getting the keypair."))
         sys.exit(2)

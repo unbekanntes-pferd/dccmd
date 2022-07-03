@@ -17,9 +17,9 @@ from dracoon.errors import (
     InvalidPathError,
     HTTPConflictError,
     HTTPForbiddenError,
-    HTTPStatusError,
+    DRACOONHttpError,
 )
-
+from ..models import DCTransfer, DCTransferList
 from ..util import format_error_message, to_readable_size
 from ..auth.credentials import get_crypto_credentials, store_crypto_credentials
 
@@ -79,11 +79,13 @@ class FileItem:
             self.dir_path = dir_path.replace("\\", "/")
         else:
             self.dir_path = dir_path
+        self.x_path = Path(dir_path)
         self.abs_path = self.dir_path.replace(base_path, "")
         self.name = self.abs_path.split("/")[-1]
         self.parent_path = ("/").join(self.abs_path.split("/")[:-1])
         self.level = len(self.abs_path.split("/")) - 1
         self.size = os.path.getsize(self.dir_path)
+        self.x_size = self.x_path.stat().st_size
 
 
 class FileItemList:
@@ -111,7 +113,16 @@ class FileItemList:
         """sort files by file size"""
         self.file_list.sort(key=lambda item: item.size, reverse=True)
 
+    @property
+    def file_count(self):
+        """ returns file count """
+        return len(self.file_list)
 
+    @property
+    def total_size(self):
+        """ return total size in bytes """
+        return sum([item.size for item in self.file_list])
+    
 def convert_to_dir_items(dir_list: list[str], base_dir: str) -> list[DirectoryItem]:
     """convert a list of paths to a list of directory items (helper class)"""
 
@@ -191,7 +202,7 @@ async def create_folder_struct(source: str, target: str, dracoon: DRACOON):
                     )
                 )
                 sys.exit(2)
-            except HTTPStatusError:
+            except DRACOONHttpError:
                 await dracoon.logout()
                 typer.echo(
                     format_error_message(msg="An error ocurred creating the folder.")
@@ -231,6 +242,7 @@ async def bulk_upload(
 
     file_list = FileItemList(source_path=source)
     file_list.sort_by_size()
+    transfer_list = DCTransferList(total=file_list.total_size, file_count=file_list.file_count)
 
     if velocity > 10:
         velocity = 10
@@ -239,48 +251,43 @@ async def bulk_upload(
 
     concurrent_reqs = velocity * 5
 
-    typer.echo(f"{len(file_list.file_list)} files to upload.")
+    upload_reqs = []
 
-    upload_reqs = [
-        dracoon.upload(
+    for item in file_list.file_list:
+        upload_job = DCTransfer(transfer=transfer_list)
+        req = dracoon.upload(
             file_path=item.dir_path,
             target_path=(target + item.parent_path),
             resolution_strategy=resolution_strategy,
             display_progress=False,
+            callback_fn=upload_job.update     
         )
-        for item in file_list.file_list
-    ]
-    total_files = len(upload_reqs)
-    total_size = sum([item.size for item in file_list.file_list])
+        upload_reqs.append(req)
 
-    typer.echo(f"{to_readable_size(size=total_size)} total.")
-
-    with typer.progressbar(length=total_files, label="Uploading files...") as progress:
-        for batch in dracoon.batch_process(
+    for batch in dracoon.batch_process(
             coro_list=upload_reqs, batch_size=concurrent_reqs
         ):
-            progress.update(len(batch))
-            try:
-                await asyncio.gather(*batch)
-            except HTTPConflictError:
-                # ignore file already exists error
-                pass
-            except HTTPForbiddenError:
-                await dracoon.logout()
-                typer.echo(
+        try:
+            await asyncio.gather(*batch)
+        except HTTPConflictError:
+            # ignore file already exists error
+            pass
+        except HTTPForbiddenError:
+            await dracoon.logout()
+            typer.echo(
                     format_error_message(
                         msg="Insufficient permissions (create / esdit required)."
                     )
                 )
-                sys.exit(2)
-            except HTTPStatusError:
-                await dracoon.logout()
-                typer.echo(
+            sys.exit(2)
+        except DRACOONHttpError:
+            await dracoon.logout()
+            typer.echo(
                     format_error_message(msg="An error ocurred uploading files.")
                 )
-                sys.exit(2)
-            except WriteTimeout:
-                continue
+            sys.exit(2)
+        except WriteTimeout:
+            continue
 
 
 def create_folder(name: str, parent_id: int, dracoon: DRACOON):
