@@ -49,6 +49,7 @@ class DownloadList:
         self.folder_list = folder_list
         self.node = node
         self.target_path = target_path
+        print(self.base_level)
     
     def get_level(self, level: int) -> list[DownloadDirectoryItem]:
         """get all directories in a depth level"""
@@ -79,7 +80,7 @@ class DownloadList:
     @property
     def folder_paths(self) -> list[str]:
         """ returns all folder paths in alphabetical order """
-        return sorted([f"{node.parentPath}{node.name}" for node in self.folder_list.items])
+        return sorted([f"{normalize_parent_path(parent_path=node.parentPath, level=self.base_level)}{node.name}" for node in self.folder_list.items])
 
     @property
     def folder_items(self) -> list[DownloadDirectoryItem]:
@@ -89,12 +90,29 @@ class DownloadList:
     @property
     def file_items(self) -> list[DownloadFileItem]:
         """ returns folder item including level """
-        return [DownloadFileItem(dir_path=f"{node.parentPath}{node.name}", base_path=self.target_path, node_info=node) for node in self.file_list.items]
+        return [DownloadFileItem(dir_path=f"{normalize_parent_path(parent_path=node.parentPath, level=self.base_level)}{node.name}", 
+                base_path=self.target_path, node_info=node) for node in self.file_list.items]
 
     @property
     def levels(self):
         """ returns levels """ 
         return set([dir.level for dir in self.folder_items])
+
+    @property
+    def base_level(self):
+        """ return base level of the source container """
+        path_comp = self.node.parentPath.split("/")
+
+        if len(path_comp) == 2:
+            return 0
+        elif len(path_comp) >= 3:
+            return len(path_comp) - 2
+
+def normalize_parent_path(parent_path: str, level: int):
+    """ remove parent path components if root on specific level """
+    path_comp = parent_path.split('/')
+    normalized_comp = path_comp[level+1:]
+    return "/" + "/".join(normalized_comp)
 
 
 def create_folder(name: str, target_dir_path: str):
