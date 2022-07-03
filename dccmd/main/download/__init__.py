@@ -1,4 +1,10 @@
+"""
+Module implementing bulk download from DRACOON
+
+"""
+
 import os
+import sys
 import asyncio
 from pathlib import Path
 from enum import Enum
@@ -12,6 +18,7 @@ from dracoon.errors import InvalidPathError
 from dracoon.nodes.responses import NodeList, Node
 
 from ..models import DCTransfer, DCTransferList
+from ..util import format_error_message
 
 class NodeType(Enum):
     """ represents DRACOON node types """
@@ -172,6 +179,10 @@ async def create_download_list(dracoon: DRACOON, node_info: Node, target_path: s
 
 async def bulk_download(dracoon: DRACOON, download_list: DownloadList, velocity: int = 2):
     """ download all files within a room (excluded: sub rooms) """
+
+    if len(download_list.file_list.items) <= 0:
+        typer.echo(format_error_message(f"No files to download in {download_list.node.parentPath}{download_list.node.name}"))
+        sys.exit(1)
 
     if velocity > 10:
         velocity = 10

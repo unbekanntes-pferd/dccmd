@@ -759,6 +759,8 @@ def download(
                 await dracoon.logout()
                 sys.exit(1)
 
+            
+
             try:
                 await bulk_download(dracoon=dracoon, download_list=download_list, velocity=velocity)
             except FileConflictError:
