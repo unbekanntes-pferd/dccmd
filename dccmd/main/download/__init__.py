@@ -15,16 +15,10 @@ import typer
 from tqdm import tqdm
 from dracoon import DRACOON
 from dracoon.errors import InvalidPathError
-from dracoon.nodes.responses import NodeList, Node
+from dracoon.nodes.responses import NodeList, Node, NodeType
 
 from ..models import DCTransfer, DCTransferList
 from ..util import format_error_message
-
-class NodeType(Enum):
-    """ represents DRACOON node types """
-    FILE = "file"
-    FOLDER = "folder"
-    ROOM = "room"
 
 
 class DownloadDirectoryItem:
@@ -127,7 +121,7 @@ def create_folder(name: str, target_dir_path: str):
     target_path = Path(target_dir_path)
 
     if not target_path.is_dir():
-        raise InvalidPathError()
+        raise InvalidPathError(message=f"Path {target_path} is not a folder: Creating {name} failed.")
 
     target_path = target_path.joinpath(name)
     target_path.mkdir()
@@ -138,12 +132,12 @@ async def get_nodes(dracoon: DRACOON, parent_id: int, node_type: NodeType, depth
     node_filter = 'type:eq:'
 
 
-    if node_type == NodeType.FILE:
-        node_filter += NodeType.FILE.value
-    if node_type == NodeType.FOLDER:
-        node_filter += NodeType.FOLDER.value
-    if node_type == NodeType.ROOM:
-        node_filter += NodeType.ROOM.value
+    if node_type == NodeType.file:
+        node_filter += NodeType.file.value
+    if node_type == NodeType.folder:
+        node_filter += NodeType.folder.value
+    if node_type == NodeType.room:
+        node_filter += NodeType.room.value
 
     node_list = await dracoon.nodes.search_nodes(search="*", parent_id=parent_id, depth_level=depth_level, filter=node_filter)
     if node_list.range.total > 500:
@@ -164,14 +158,14 @@ async def create_download_list(dracoon: DRACOON, node_info: Node, target_path: s
 
     target_path_check = Path(target_path)
     if not target_path_check.is_dir():
-        raise InvalidPathError()
+        raise InvalidPathError(message=f"Path {target_path_check} is not a folder.")
 
     # get all files and folders within path
-    all_files = await get_nodes(dracoon=dracoon, parent_id=node_info.id, node_type=NodeType.FILE)
-    all_folders = await get_nodes(dracoon=dracoon, parent_id=node_info.id, node_type=NodeType.FOLDER)
+    all_files = await get_nodes(dracoon=dracoon, parent_id=node_info.id, node_type=NodeType.file)
+    all_folders = await get_nodes(dracoon=dracoon, parent_id=node_info.id, node_type=NodeType.folder)
 
     # only consider those with authParentId of the parent room if the source is a room (exclude sub rooms)
-    if node_info.type == NodeType.ROOM:
+    if node_info.type == NodeType.room:
         all_files.items = [item for item in all_files.items if item.authParentId == node_info.id]
         all_folders.items = [item for item in all_folders.items if item.authParentId == node_info.id]
 

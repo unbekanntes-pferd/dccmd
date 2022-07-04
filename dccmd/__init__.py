@@ -4,7 +4,7 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 # std imports
 import sys
@@ -23,6 +23,7 @@ from dracoon.errors import (
     InvalidFileError,
     FileConflictError,
     HTTPNotFoundError,
+    HTTPUnauthorizedError
 )
 import typer
 
@@ -187,6 +188,12 @@ def upload(
                     display_progress=True,
                     raise_on_err=True,
                 )
+            except HTTPUnauthorizedError:
+                delete_credentials(base_url=base_url)
+                format_error_message(
+                        msg="Re-authentication required - please run operation again with new login."
+                )
+                sys.exit(1)
             except HTTPForbiddenError:
                 await dracoon.logout()
                 typer.echo(
@@ -262,7 +269,7 @@ def mkdir(
     async def _create_folder():
 
         # get authenticated DRACOON instance
-        dracoon, _ = await init_dracoon(
+        dracoon, base_url = await init_dracoon(
             url_str=dir_path,
             username=username,
             password=password,
@@ -286,6 +293,12 @@ def mkdir(
 
         try:
             await dracoon.nodes.create_folder(folder=payload, raise_on_err=True)
+        except HTTPUnauthorizedError:
+            delete_credentials(base_url=base_url)
+            format_error_message(
+                        msg="Re-authentication required - please run operation again with new login."
+                )
+            sys.exit(1)
         except HTTPConflictError:
             await dracoon.logout()
             typer.echo(format_error_message(msg=f"Name already exists: {dir_path}"))
@@ -337,7 +350,7 @@ def mkroom(
     async def _create_room():
 
         # get authenticated DRACOON instance
-        dracoon, _ = await init_dracoon(
+        dracoon, base_url = await init_dracoon(
             url_str=dir_path,
             username=username,
             password=password,
@@ -369,6 +382,12 @@ def mkroom(
 
         try:
             await dracoon.nodes.create_room(room=payload, raise_on_err=True)
+        except HTTPUnauthorizedError:
+            delete_credentials(base_url=base_url)
+            format_error_message(
+                        msg="Re-authentication required - please run operation again with new login."
+                )
+            sys.exit(1)
         except HTTPConflictError:
             typer.echo(format_error_message(msg=f"Name already exists: {dir_path}"))
             await dracoon.logout()
@@ -404,8 +423,6 @@ def mkroom(
             )
             sys.exit(1)
 
-
-
         typer.echo(format_success_message(msg=f"Room {room_name} created."))
         await dracoon.logout()
 
@@ -440,7 +457,7 @@ def rm(
     async def _delete_node():
 
         # get authenticated DRACOON instance
-        dracoon, _ = await init_dracoon(
+        dracoon, base_url = await init_dracoon(
             url_str=source_path,
             username=username,
             password=password,
@@ -477,6 +494,12 @@ def rm(
             sys.exit(1)
         try:
             await dracoon.nodes.delete_node(node_id=node.id, raise_on_err=True)
+        except HTTPUnauthorizedError:
+            delete_credentials(base_url=base_url)
+            format_error_message(
+                        msg="Re-authentication required - please run operation again with new login."
+                )
+            sys.exit(1)
         except HTTPForbiddenError:
             await dracoon.logout()
             typer.echo(
@@ -548,7 +571,7 @@ def ls(
     async def _list_nodes():
 
         # get authenticated DRACOON instance
-        dracoon, _ = await init_dracoon(
+        dracoon, base_url = await init_dracoon(
             url_str=source_path,
             username=username,
             password=password,
@@ -582,6 +605,12 @@ def ls(
             sys.exit(1)
         try:
             nodes = await dracoon.nodes.get_nodes(parent_id=parent_id, raise_on_err=True)
+        except HTTPUnauthorizedError:
+            delete_credentials(base_url=base_url)
+            format_error_message(
+                        msg="Re-authentication required - please run operation again with new login."
+                )
+            sys.exit(1)
         except HTTPForbiddenError:
             await dracoon.logout()
             typer.echo(
@@ -627,6 +656,12 @@ def ls(
                         parent_id=parent_id, offset=offset, raise_on_err=True
                     )
                     nodes.items.extend(nodes_res.items)
+                except HTTPUnauthorizedError:
+                    delete_credentials(base_url=base_url)
+                    format_error_message(
+                            msg="Re-authentication required - please run operation again with new login."
+                    )
+                    sys.exit(1)
                 except HTTPForbiddenError:
                     await dracoon.logout()
                     typer.echo(
@@ -759,10 +794,14 @@ def download(
                 await dracoon.logout()
                 sys.exit(1)
 
-            
-
             try:
                 await bulk_download(dracoon=dracoon, download_list=download_list, velocity=velocity)
+            except HTTPUnauthorizedError:
+                delete_credentials(base_url=base_url)
+                format_error_message(
+                        msg="Re-authentication required - please run operation again with new login."
+                )
+                sys.exit(1)
             except FileConflictError:
                 typer.echo(
                     format_error_message(
@@ -781,8 +820,6 @@ def download(
                         msg=f"Cannot write on target path ({target_dir_path})"
                     )
                 )
-            finally:
-                await dracoon.logout()
         elif is_file_path:
             transfer = DCTransferList(total=node_info.size, file_count=1)
             download_job = DCTransfer(transfer=transfer)
@@ -814,6 +851,12 @@ def download(
                     format_error_message(
                         msg=f"File already exists on target path ({target_dir_path})"
                     )
+                )
+                sys.exit(1)
+            except HTTPUnauthorizedError:
+                delete_credentials(base_url=base_url)
+                format_error_message(
+                        msg="Re-authentication required - please run operation again with new login."
                 )
                 sys.exit(1)
             except DRACOONHttpError:
