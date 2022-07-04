@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dccmd"
-version = "0.3.1"
+version = "0.3.2"
 description = "DRACOON Commander – CLI client for DRACOON Cloud (dracoon.com)"
 authors = ["Octavio Simone <70800577+unbekanntes-pferd@users.noreply.github.com>"]
 license = "Apache-2.0"

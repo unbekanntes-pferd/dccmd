@@ -4,7 +4,7 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 # std imports
 import sys
@@ -820,6 +820,11 @@ def download(
                         msg=f"Cannot write on target path ({target_dir_path})"
                     )
                 )
+            finally:
+                typer.echo(
+                    f'{format_success_message(f"{node_info.type.value} {node_info.name} downloaded to {target_dir_path}.")}'
+                )
+                await dracoon.logout()
         elif is_file_path:
             transfer = DCTransferList(total=node_info.size, file_count=1)
             download_job = DCTransfer(transfer=transfer)
