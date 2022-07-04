@@ -10,8 +10,6 @@ import typer
 import httpx
 from dracoon import DRACOON, OAuth2ConnectionType
 from dracoon.errors import HTTPUnauthorizedError, DRACOONHttpError, HTTPBadRequestError
-
-
 from dccmd import __version__ as dccmd_version
 from dccmd import __name__ as dccmd_name
 from dccmd.main.util import (format_error_message, format_success_message,
