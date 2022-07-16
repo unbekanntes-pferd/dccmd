@@ -18,6 +18,10 @@ async def distribute_missing_keys(
         room_id=room_id, file_id=file_id
     )
 
+    if missing_keys.range.total == 0:
+        typer.echo("No file keys to distribute for given path.")
+        return
+
     typer.echo(f"Total keys: {missing_keys.range.total}")
 
     keys = dracoon.nodes.make_set_file_keys(file_key_list=[])

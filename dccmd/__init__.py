@@ -4,7 +4,7 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 # std imports
 import sys
@@ -639,7 +639,7 @@ def ls(
 
         # handle more than 500 items
         if nodes.range.total > 500:
-            if not all_items: 
+            if not all_items:
                 show_all = typer.confirm(
                 f"More than 500 nodes in {parsed_path} - display all?"
             )
@@ -781,6 +781,8 @@ def download(
                     msg="Folder or room can only be downloaded via recursive (-r) flag."
                 )
             )
+            await dracoon.logout()
+            sys.exit(1)
         elif is_container and recursive:
             try:
                 download_list = await create_download_list(dracoon=dracoon, node_info=node_info,
@@ -796,6 +798,9 @@ def download(
 
             try:
                 await bulk_download(dracoon=dracoon, download_list=download_list, velocity=velocity)
+                typer.echo(
+                    f'{format_success_message(f"{node_info.type.value} {node_info.name} downloaded to {target_dir_path}.")}'
+                )
             except HTTPUnauthorizedError:
                 delete_credentials(base_url=base_url)
                 format_error_message(
@@ -821,9 +826,6 @@ def download(
                     )
                 )
             finally:
-                typer.echo(
-                    f'{format_success_message(f"{node_info.type.value} {node_info.name} downloaded to {target_dir_path}.")}'
-                )
                 await dracoon.logout()
         elif is_file_path:
             transfer = DCTransferList(total=node_info.size, file_count=1)
@@ -836,6 +838,9 @@ def download(
                     raise_on_err=True,
                     callback_fn=download_job.update
                 )
+                typer.echo(
+                f'{format_success_message(f"File {file_name} downloaded to {target_dir_path}.")}'
+            )
             # to do: replace with handling via PermissionError
             except UnboundLocalError:
                 typer.echo(
@@ -899,11 +904,16 @@ def download(
                 await dracoon.logout()
 
 
-            typer.echo(
-                f'{format_success_message(f"File {file_name} downloaded to {target_dir_path}.")}'
-            )
-
     asyncio.run(_download())
+
+
+@app.command()
+def version():
+    """
+    Dsiplay current version of DRACOON Commander
+    """
+
+    typer.echo(f"DRACOON Commander (dccmd) version {__version__}")
 
 
 if __name__ == "__main__":
