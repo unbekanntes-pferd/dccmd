@@ -118,4 +118,6 @@ def distribute(
 
         await distribute_missing_keys(dracoon=dracoon, room_id=distrib_node_id)
 
+        await dracoon.logout()
+
     asyncio.run(_distribute_keys())
