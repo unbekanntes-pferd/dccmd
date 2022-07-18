@@ -7,10 +7,9 @@ Collection of helpers / utils
 """
 
 
-from pathlib import Path
-import asyncio
-import math
 
+
+import math
 import typer
 
 from dracoon import DRACOON

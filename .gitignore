@@ -10,3 +10,6 @@ __pycache__
 
 # builds
 /dist
+
+#virtual environment
+.venv
