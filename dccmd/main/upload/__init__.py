@@ -20,9 +20,7 @@ from dracoon.errors import (
     DRACOONHttpError,
 )
 from ..models import DCTransfer, DCTransferList
-from ..util import format_error_message, to_readable_size
-from ..auth.credentials import get_crypto_credentials, store_crypto_credentials
-
+from ..util import format_error_message
 
 class DirectoryItem:
     """object representing a directory with all required path elements"""
@@ -192,8 +190,8 @@ async def create_folder_struct(source: str, target: str, dracoon: DRACOON):
         for reqs in dracoon.batch_process(coro_list=folder_reqs, batch_size=10):
             try:
                 await asyncio.gather(*reqs)
-            except HTTPConflictError:
-                continue
+            except HTTPConflictError:  
+                pass
             except HTTPForbiddenError:
                 await dracoon.logout()
                 typer.echo(
@@ -271,7 +269,7 @@ async def bulk_upload(
             await asyncio.gather(*batch)
         except HTTPConflictError:
             # ignore file already exists error
-            pass
+            continue
         except HTTPForbiddenError:
             await dracoon.logout()
             typer.echo(

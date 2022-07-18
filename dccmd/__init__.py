@@ -4,16 +4,13 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 
 # std imports
 import sys
-import platform
 import asyncio
-from datetime import datetime
 
 # external imports
-from dracoon import DRACOON, OAuth2ConnectionType
 from dracoon.nodes.models import NodeType
 from dracoon.errors import (
     DRACOONHttpError,
@@ -22,7 +19,6 @@ from dracoon.errors import (
     InvalidPathError,
     InvalidFileError,
     FileConflictError,
-    HTTPNotFoundError,
     HTTPUnauthorizedError
 )
 import typer
@@ -30,39 +26,30 @@ import typer
 
 # internal imports
 from dccmd.main.util import (
-    parse_base_url,
     parse_file_name,
     parse_path,
     parse_new_path,
     format_error_message,
     format_success_message,
     format_and_print_node,
-    graceful_exit,
     to_readable_size,
 )
 from dccmd.main.auth import auth_app
-from dccmd.main.auth.client import client_app, register_client, remove_client
-from dccmd.main.auth.util import init_dracoon, is_dracoon_url
+from dccmd.main.auth.client import client_app
+from dccmd.main.auth.util import init_dracoon
 from dccmd.main.auth.credentials import (
-    get_credentials,
     get_crypto_credentials,
-    store_crypto_credentials,
-    store_client_credentials,
-    get_client_credentials,
-    delete_client_credentials,
-    delete_credentials,
-    delete_crypto_credentials,
+    delete_credentials
 )
 
 from dccmd.main.crypto import crypto_app
 from dccmd.main.users import users_app
 from dccmd.main.crypto.keys import distribute_missing_keys
-from dccmd.main.crypto.util import get_keypair, init_keypair
+from dccmd.main.crypto.util import init_keypair
 from dccmd.main.upload import create_folder_struct, bulk_upload, is_directory, is_file
 from dccmd.main.download import create_download_list, bulk_download
 from dccmd.main.models import DCTransfer, DCTransferList
-from dccmd.main.models.errors import (DCPathParseError, DCClientParseError,
-                                      ConnectError)
+from dccmd.main.models.errors import (DCPathParseError, ConnectError)
 
 # initialize CLI app
 app = typer.Typer()
@@ -176,7 +163,10 @@ def upload(
                 resolution_strategy=resolution_strategy,
                 velocity=velocity,
             )
-            folder_name = parse_file_name(full_path=source_dir_path)
+            try:
+                folder_name = parse_file_name(full_path=source_dir_path)
+            except DCPathParseError:
+                folder_name = source_dir_path
             typer.echo(f'{format_success_message(f"Folder {folder_name} uploaded.")}')
         # upload a single file
         elif is_file_path:

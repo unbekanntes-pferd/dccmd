@@ -7,9 +7,6 @@ import os
 import sys
 import asyncio
 from pathlib import Path
-from enum import Enum
-from dataclasses import dataclass
-
 
 import typer
 from tqdm import tqdm

@@ -5,15 +5,10 @@ All functions require user manager permission
 """
 
 # std import
-import sys
 import asyncio
-import logging
 
 # external imports
 import typer
-import httpx
-
-from dracoon import DRACOON
 
 from dccmd.main.auth.util import init_dracoon
 
