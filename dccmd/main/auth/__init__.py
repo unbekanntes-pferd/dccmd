@@ -7,36 +7,23 @@ Stored refresh token management
 # std import
 import sys
 import asyncio
-import logging
 
 # external imports
 import typer
-import httpx
-from dracoon import DRACOON, OAuth2ConnectionType
-from dracoon.client import DRACOONConnection
-from dracoon.errors import HTTPUnauthorizedError, DRACOONHttpError, HTTPNotFoundError
 
 # internal imports
 from .credentials import (
     get_credentials,
-    store_credentials,
     delete_credentials,
-    get_client_credentials,
-    store_client_credentials,
-    delete_client_credentials,
     get_crypto_credentials,
-    store_crypto_credentials,
     delete_crypto_credentials,
 )
 from .util import login
 from ..util import (
     format_error_message,
     format_success_message,
-    graceful_exit,
     parse_base_url,
 )
-from ..models.errors import DCClientParseError
-
 
 auth_app = typer.Typer()
 
@@ -104,5 +91,6 @@ def ls(
             typer.echo(
             f"Username: {dracoon.user_info.userName} ({dracoon.user_info.firstName} {dracoon.user_info.lastName})"
             )
-
+            await dracoon.logout()
+        
     asyncio.run(_ls())
