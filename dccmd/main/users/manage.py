@@ -7,8 +7,7 @@ Module with utility functions for user management
 import sys
 import csv
 import asyncio
-from typing import Optional
-from urllib import parse
+from typing import Optional, Union
 
 from dracoon import DRACOON
 from dracoon.errors import (
@@ -17,6 +16,8 @@ from dracoon.errors import (
     HTTPForbiddenError,
     DRACOONHttpError,
 )
+from dracoon.nodes.responses import RoomUser, RoomUserList
+from dracoon.user.responses import UserItem, UserList
 from pydantic import BaseModel
 import typer
 
@@ -283,12 +284,26 @@ async def get_users(dracoon: DRACOON, search_string: str = ''):
     return user_list
 
 
-async def find_user_by_username(dracoon: DRACOON, user_name: str):
+async def find_user_by_username(dracoon: DRACOON, user_name: str, as_user_manager: bool = True, 
+                                room_id: int = None) -> Union[RoomUser, UserItem]:
     """ Find a user by username """
-    user_name = parse.quote(user_name)
+    #user_name = parse.quote(user_name)
+
+    if not as_user_manager and room_id is None:
+        await dracoon.logout()
+        typer.echo(
+            format_error_message(
+                msg="Cannot find user without user manager and room id."
+                )
+            )
+        sys.exit(1)
 
     try:
-        user_list = await dracoon.users.get_users(filter=f'userName:eq:{user_name}')
+        if as_user_manager:
+            user_list = await dracoon.users.get_users(filter=f'userName:eq:{user_name}')
+        else:
+            filter_str = "isGranted:eq:any|user:cn:"
+            user_list = await dracoon.nodes.get_room_users(room_id=room_id, filter=f"{filter_str}{user_name}")
     except HTTPForbiddenError:
         await dracoon.logout()
         typer.echo(
@@ -301,7 +316,7 @@ async def find_user_by_username(dracoon: DRACOON, user_name: str):
         await dracoon.logout()
         typer.echo(
             format_error_message(
-                msg="An error ocurred - could not delete user."
+                msg="An error ocurred - could not find user."
                 )
             )
         sys.exit(1)
@@ -314,8 +329,8 @@ async def find_user_by_username(dracoon: DRACOON, user_name: str):
                 )
             )
         sys.exit(1)
-  
-    return user_list[0]
+
+    return user_list.items[0]
 
 
 

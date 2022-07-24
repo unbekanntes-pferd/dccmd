@@ -4,7 +4,7 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.3.5"
+__version__ = "0.4.0-SNAPSHOT"
 
 # std imports
 import sys
@@ -44,6 +44,7 @@ from dccmd.main.auth.credentials import (
 
 from dccmd.main.crypto import crypto_app
 from dccmd.main.users import users_app
+from dccmd.main.users.manage import find_user_by_username
 from dccmd.main.crypto.keys import distribute_missing_keys
 from dccmd.main.crypto.util import init_keypair
 from dccmd.main.upload import create_folder_struct, bulk_upload, is_directory, is_file
@@ -322,6 +323,12 @@ def mkroom(
         ...,
         help="Full path to create a room (inherit permissions) in DRACOON (e.g. dracoon.team/room)",
     ),
+    admin_user: str = typer.Option(
+        None,
+        "--admin-user",
+        "-au",
+        help="Username of the admin user of the room",
+    ),
     cli_mode: bool = typer.Option(
         False, help="When active, accepts username and password"
     ),
@@ -351,24 +358,43 @@ def mkroom(
         # remove base url from path
         parsed_path = parse_new_path(full_path=dir_path)
 
+        if parsed_path != "/":
+            parent_node = await dracoon.nodes.get_node_from_path(path=parsed_path)
+            parent_id = parent_node.id
+        elif parsed_path == "/":
+            parent_node = None
+            parent_id = 0
+
         room_name = parse_file_name(full_path=dir_path)
 
-        parent_node = await dracoon.nodes.get_node_from_path(path=parsed_path)
-
-        if parent_node is None:
+        if parsed_path != "/" and parent_node is None:
             await dracoon.logout()
             typer.echo(format_error_message(msg=f"Node not found: {parsed_path}"))
             sys.exit(1)
-        if parent_node.type != NodeType.room:
+        if parent_node and parent_node.type != NodeType.room:
             await dracoon.logout()
             typer.echo(
                 format_error_message(msg=f"Parent path must be a room: {parsed_path}")
             )
             sys.exit(1)
 
-        payload = dracoon.nodes.make_room(
-            name=room_name, parent_id=parent_node.id, inherit_perms=True
-        )
+        if not admin_user and parent_id == 0:
+            await dracoon.logout()
+            typer.echo(
+                format_error_message(msg="An admin user must be provided on root path.")
+            )
+            sys.exit(1)
+
+        if admin_user and parent_id != 0:
+            user_info = await find_user_by_username(dracoon=dracoon, user_name=admin_user, as_user_manager=False, room_id=parent_id)
+            payload = dracoon.nodes.make_room(name=room_name, parent_id=parent_id, inherit_perms=False, admin_ids=[user_info.userInfo.id])
+        if admin_user and parent_id == 0:
+            user_info = await find_user_by_username(dracoon=dracoon, user_name=admin_user)
+            payload = dracoon.nodes.make_room(name=room_name, inherit_perms=False, admin_ids=[user_info.id], parent_id=None)
+        else:
+            payload = dracoon.nodes.make_room(
+            name=room_name, parent_id=parent_id, inherit_perms=True
+            )
 
         try:
             await dracoon.nodes.create_room(room=payload, raise_on_err=True)
