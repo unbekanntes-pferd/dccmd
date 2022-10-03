@@ -190,7 +190,7 @@ async def _login_prompt(base_url: str, dracoon: DRACOON) -> DRACOON:
     try:
         await dracoon.connect(auth_code=auth_code)
     except HTTPUnauthorizedError:
-        graceful_exit(dracoon=dracoon)
+        await graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="Wrong authorization code."))
     except DRACOONHttpError:
         graceful_exit(dracoon=dracoon)
@@ -209,10 +209,14 @@ async def _login_prompt(base_url: str, dracoon: DRACOON) -> DRACOON:
 async def _login_refresh_token(
     base_url: str, dracoon: DRACOON, refresh_token: str
 ) -> DRACOON:
+    
     try:
         await dracoon.connect(connection_type=OAuth2ConnectionType.refresh_token, refresh_token=refresh_token)
-    except HTTPUnauthorizedError as err:
+        store_credentials(
+        base_url=base_url, refresh_token=dracoon.client.connection.refresh_token
+    )
 
+    except HTTPUnauthorizedError as err:
         await graceful_exit(dracoon=dracoon)
 
         err_body = err.error.response.json()
@@ -227,15 +231,18 @@ async def _login_refresh_token(
         else:
             delete_credentials(base_url=base_url)
             typer.echo(format_error_message(msg="Refresh token expired."))
-    except DRACOONHttpError:
-        graceful_exit(dracoon=dracoon)
+    except HTTPBadRequestError as err:
+        await graceful_exit(dracoon=dracoon)
+        err_body = err.error.response.json()
+        if "error" in err_body and err_body["error"] == "invalid_grant":
+            delete_credentials(base_url=base_url)
+            typer.echo(format_error_message(msg="Refresh token expired."))
+            await _login_prompt(base_url=base_url, dracoon=dracoon)
+
+    except DRACOONHttpError as err:
+        await graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="Login failed."))
-
-
-    # store new refresh token
-    store_credentials(
-        base_url=base_url, refresh_token=dracoon.client.connection.refresh_token
-    )
+        raise typer.Abort() from err
 
     return dracoon
 

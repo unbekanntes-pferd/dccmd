@@ -97,7 +97,7 @@ def upload(
         None, help="Password to log in to DRACOON - only works with active cli mode"
     ),
 ):
-    """Upload a file into DRACOON by providing a source path and a target room or folder"""
+    """Upload a file or folder into DRACOON """
 
     async def _upload():
 
@@ -575,6 +575,9 @@ def ls(
     all_items: bool = typer.Option(
         False, help="When active, returns all items without prompt"
     ),
+    room_manager: bool = typer.Option(
+        False, help="When active, returns all nodes as room admin / manager"
+    ),
     username: str = typer.Argument(
         None, help="Username to log in to DRACOON - only works with active cli mode"
     ),
@@ -620,7 +623,7 @@ def ls(
             )
             sys.exit(1)
         try:
-            nodes = await dracoon.nodes.get_nodes(parent_id=parent_id, raise_on_err=True)
+            nodes = await dracoon.nodes.get_nodes(parent_id=parent_id, room_manager=room_manager, raise_on_err=True)
         except HTTPUnauthorizedError:
             delete_credentials(base_url=base_url)
             format_error_message(
@@ -669,7 +672,7 @@ def ls(
             for offset in range(500, nodes.range.total, 500):
                 try:
                     nodes_res = await dracoon.nodes.get_nodes(
-                        parent_id=parent_id, offset=offset, raise_on_err=True
+                        parent_id=parent_id, offset=offset, room_manager=room_manager, raise_on_err=True
                     )
                     nodes.items.extend(nodes_res.items)
                 except HTTPUnauthorizedError:
@@ -754,8 +757,7 @@ def download(
     ),
 ):
     """
-    Download a file from DRACOON by providing a source path
-    and a target directory / path for the file
+    Download a file, folder or room from DRACOON 
     """
 
     async def _download():
@@ -859,11 +861,13 @@ def download(
             )
             # to do: replace with handling via PermissionError
             except UnboundLocalError:
+                await dracoon.logout()
                 typer.echo(
                 format_error_message(msg=f"Insufficient permissions on target path ({target_dir_path})")
                 )
                 sys.exit(1)
             except InvalidPathError:
+                await dracoon.logout()
                 typer.echo(
                 format_error_message(msg=f"Path must be a folder ({target_dir_path})")
                 )
@@ -873,6 +877,7 @@ def download(
                 typer.echo(format_error_message(msg=f"File does not exist ({parsed_path})"))
                 sys.exit(1)
             except FileConflictError:
+                await dracoon.logout()
                 typer.echo(
                     format_error_message(
                         msg=f"File already exists on target path ({target_dir_path})"
@@ -880,6 +885,7 @@ def download(
                 )
                 sys.exit(1)
             except HTTPUnauthorizedError:
+                await dracoon.logout()
                 delete_credentials(base_url=base_url)
                 format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -897,27 +903,12 @@ def download(
                     )
                 )
                 sys.exit(1)
-            except TimeoutError:
-                typer.echo(
-                    format_error_message(
-                        msg="Connection timeout - could not download file."
-                    )
-                )
-                sys.exit(1)
-            except ConnectError:
-                typer.echo(
-                    format_error_message(
-                        msg="Connection error - could not download file."
-                    )
-                )
-                sys.exit(1)
             except KeyboardInterrupt:
                 await dracoon.logout()
                 typer.echo(
                 f'{format_success_message(f"Download canceled ({file_name}).")}'
             )
-            finally:
-                await dracoon.logout()
+
 
 
     asyncio.run(_download())
@@ -929,7 +920,36 @@ def version():
     Dsiplay current version of DRACOON Commander
     """
 
-    typer.echo(f"DRACOON Commander (dccmd) version {__version__}")
+    typer.echo(
+               "@@@@@@@@@@@@@@@@@@      @@@@@@@@@@@@@@@@@@      @@@@@@@@@@@@@@@@@@      @@@@@@@@@        @@@@@@@@@   @@@@@@@@@@@@@@@@@@\n"                                               
+               "@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@      @@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@@    @@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@@@   @@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@ @@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@     @@@@@@@@   @@@@@@@@      @@@@@@@@  @@@@@@@@ @@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@     @@@@@@@@   @@@@@@@@      @@@@@@@@  @@@@@@@@  @@@@@@@@ @@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@ @@@@@@@@@@@@   @@@@@@@@  @@@@@@@@@@@   @@@@@@@@@@@   @@@@@@@@  @@@@@@@@  @@@@@@@  @@@@@@@   @@@@@@@@@@@  @@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@   @@@@@   @@@@@@@   @@@@@@@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@@@@@@@     @@@@@@@@@@@@@@@@@@@@      @@@@@@@@@@@@@@@@@@@@    @@@@@@    @@@    @@@@@@@    @@@@@@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@@@@        @@@@@@@@@@@@@@@@             @@@@@@@@@@@@@@@@@       @@@     @     @@@@@@@        @@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@           @@@@@@@@@@@@@                   @@@@@@@@@@@@@@                     @@@@@@@           @@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@              @@@@@@@@@@                          @@@@@@@@@@                     @@@@@@@              @@@@@@@@@@\n"                                           
+               "@@@@@@@                 @@@@@@@                                @@@@@@@                     @@@@@@@                 @@@@@@@\n"                                           
+               "@@@@                    @@@@                                      @@@@                     @@@@@@@                    @@@@\n"                                           
+               "@                       @                                            @                        @@@@                       @\n"                                           
+                                                                                                                                                         
+    )
+
+    typer.echo(f"                        DRACOON Commander (dccmd) version {__version__}")
+    typer.echo(f"                        Octavio Simone 2022")
+    typer.echo(f"                        https://github.com/unbekanntes-pferd/dccmd")
 
 
 if __name__ == "__main__":
