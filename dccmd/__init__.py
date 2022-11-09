@@ -655,7 +655,6 @@ def ls(
             )
             sys.exit(1)
 
-
         # handle more than 500 items
         if nodes.range.total > 500:
             if not all_items:
