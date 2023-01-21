@@ -168,10 +168,14 @@ async def create_users(
         else:
             user_create_reqs.append(create_local_user(dracoon=dracoon, user=user))
 
+    user_create_reqs = [asyncio.ensure_future(item) for item in user_create_reqs]
+
     for batch in dracoon.batch_process(coro_list=user_create_reqs, batch_size=25):
         try:
             await asyncio.gather(*batch)
         except HTTPForbiddenError:
+            for req in user_create_reqs:
+                req.cancel()
             await dracoon.logout()
             typer.echo(
                 format_error_message(

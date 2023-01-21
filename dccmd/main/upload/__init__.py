@@ -182,7 +182,7 @@ async def create_folder_struct(source: str, target: str, dracoon: DRACOON):
 
         # create list of folder requests
         folder_reqs = [
-            create_folder(name=item.name, parent_id=parent_id, dracoon=dracoon)
+            asyncio.ensure_future(create_folder(name=item.name, parent_id=parent_id, dracoon=dracoon))
             for item in batch
         ]
 
@@ -190,22 +190,26 @@ async def create_folder_struct(source: str, target: str, dracoon: DRACOON):
         for reqs in dracoon.batch_process(coro_list=folder_reqs, batch_size=10):
             try:
                 await asyncio.gather(*reqs)
-            except HTTPConflictError:  
+            except HTTPConflictError:
                 pass
             except HTTPForbiddenError:
+                for req in folder_reqs:
+                    req.cancel()
                 await dracoon.logout()
                 typer.echo(
                     format_error_message(
                         msg="Insufficient permissions (create required)."
                     )
                 )
-                sys.exit(2)
+                sys.exit(1)
             except DRACOONHttpError:
+                for req in folder_reqs:
+                    req.cancel()
                 await dracoon.logout()
                 typer.echo(
                     format_error_message(msg="An error ocurred creating the folder.")
                 )
-                sys.exit(2)
+                sys.exit(1)
             except WriteTimeout:
                 continue
 
@@ -222,12 +226,19 @@ async def create_folder_struct(source: str, target: str, dracoon: DRACOON):
             # fetch batches per level
             batches = sub_folders.get_batches(level=level)
 
+            folder_reqs = [asyncio.ensure_future(process_batch(item)) for item in batches]
             # process 3 batches in parallel per level
-            for batch in dracoon.batch_process(
-                coro_list=[process_batch(item) for item in batches], batch_size=3
-            ):
-                await asyncio.gather(*batch)
-
+            for batch in dracoon.batch_process(coro_list=folder_reqs, batch_size=3):
+                try:
+                    await asyncio.gather(*batch)
+                except DRACOONHttpError:
+                    for req in folder_reqs:
+                        req.cancel()
+                        await dracoon.logout()
+                        typer.echo(
+                           format_error_message(msg="An error ocurred creating the folder.")
+                           )
+                        sys.exit(1)
 
 async def bulk_upload(
     source: str,

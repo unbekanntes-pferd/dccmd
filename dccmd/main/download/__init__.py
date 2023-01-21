@@ -3,7 +3,6 @@ Module implementing bulk download from DRACOON
 
 """
 
-import os
 import sys
 import asyncio
 from pathlib import Path
@@ -11,7 +10,7 @@ from pathlib import Path
 import typer
 from tqdm import tqdm
 from dracoon import DRACOON
-from dracoon.errors import InvalidPathError
+from dracoon.errors import InvalidPathError, DRACOONHttpError
 from dracoon.nodes.responses import NodeList, Node, NodeType
 
 from ..models import DCTransfer, DCTransferList
@@ -210,10 +209,15 @@ async def bulk_download(dracoon: DRACOON, download_list: DownloadList, velocity:
         download_job = DCTransfer(transfer=transfer_list)
         download_req = dracoon.download(target_path=file_item.parent_path, callback_fn=download_job.update,
                                         source_node_id=file_item.node.id, chunksize=1048576)
-        download_reqs.append(download_req)
+        download_reqs.append(asyncio.ensure_future(download_req))
 
     for downloads in dracoon.batch_process(coro_list=download_reqs, batch_size=concurrent_reqs):
-        await asyncio.gather(*downloads)
+        try:
+            await asyncio.gather(*downloads)
+        except DRACOONHttpError:
+            for req in download_reqs:
+                req.cancel()
+                typer.echo(format_error_message("Download could not be finished."))
     
 
     
