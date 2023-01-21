@@ -44,6 +44,7 @@ from dccmd.main.auth.credentials import (
 
 from dccmd.main.crypto import crypto_app
 from dccmd.main.users import users_app
+from dccmd.main.rooms import rooms_app
 from dccmd.main.users.manage import find_user_by_username
 from dccmd.main.crypto.keys import distribute_missing_keys
 from dccmd.main.crypto.util import init_keypair
@@ -58,6 +59,7 @@ app.add_typer(typer_instance=client_app, name="client", help="Manage client info
 app.add_typer(typer_instance=auth_app, name="auth", help="Manage authentication credentials")
 app.add_typer(typer_instance=crypto_app, name="crypto", help="Manage crypto credentials")
 app.add_typer(typer_instance=users_app, name="users", help="Manage users")
+app.add_typer(typer_instance=rooms_app, name="rooms", help="Manage room permissions")
 
 
 @app.command()
@@ -947,8 +949,8 @@ def version():
     )
 
     typer.echo(f"                        DRACOON Commander (dccmd) version {__version__}")
-    typer.echo(f"                        Octavio Simone 2022")
-    typer.echo(f"                        https://github.com/unbekanntes-pferd/dccmd")
+    typer.echo("                        Octavio Simone 2022")
+    typer.echo("                        https://github.com/unbekanntes-pferd/dccmd")
 
 
 if __name__ == "__main__":
