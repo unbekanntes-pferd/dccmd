@@ -13,6 +13,7 @@ import math
 import typer
 
 from dracoon import DRACOON
+from dracoon.client import DRACOONConnection
 from dracoon.nodes.models import Node, NodeType
 
 from ..models.errors import DCPathParseError
@@ -91,6 +92,11 @@ def format_success_message(msg: str):
 
 async def graceful_exit(dracoon: DRACOON):
     """gracefully close client and revoke access token"""
+
+    if not dracoon.client.connection:
+        await dracoon.client.disconnect()
+        return
+    
     await dracoon.logout()
 
 

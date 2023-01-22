@@ -5,6 +5,7 @@ Module with utility functions for authentication
 """
 import logging
 import sys
+from typing import Tuple
 
 import typer
 import httpx
@@ -41,7 +42,7 @@ async def login(
 
     if not is_dracoon:
         typer.echo(format_error_message(msg=f"Invalid DRACOON url: {base_url}"))
-        sys.exit(2)
+        sys.exit(1)
 
     # get OAuth client
     try:
@@ -79,9 +80,11 @@ async def login(
         try:
             dracoon = await _login_password_flow(base_url, dracoon, username, password)
         except HTTPUnauthorizedError:
+            await graceful_exit(dracoon=dracoon)
             typer.echo(format_error_message(msg='Wrong username/password.'))
             sys.exit(1)
         except DRACOONHttpError:
+            await graceful_exit(dracoon=dracoon)
             typer.echo(format_error_message(msg='An error ocurred during login'))
             sys.exit(1)       
     # refresh token
@@ -112,7 +115,7 @@ async def login(
 
 async def init_dracoon(
     url_str: str, username: str, password: str, cli_mode: bool, debug: bool
-) -> tuple[DRACOON, str]:
+) -> Tuple[DRACOON, str]:
     """function to initialize DRACOON - returns an authenticated instance"""
 
     # get DRACOON base url
@@ -190,7 +193,7 @@ async def _login_prompt(base_url: str, dracoon: DRACOON) -> DRACOON:
     try:
         await dracoon.connect(auth_code=auth_code)
     except HTTPUnauthorizedError:
-        graceful_exit(dracoon=dracoon)
+        await graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="Wrong authorization code."))
     except DRACOONHttpError:
         graceful_exit(dracoon=dracoon)
@@ -209,10 +212,14 @@ async def _login_prompt(base_url: str, dracoon: DRACOON) -> DRACOON:
 async def _login_refresh_token(
     base_url: str, dracoon: DRACOON, refresh_token: str
 ) -> DRACOON:
+    
     try:
         await dracoon.connect(connection_type=OAuth2ConnectionType.refresh_token, refresh_token=refresh_token)
-    except HTTPUnauthorizedError as err:
+        store_credentials(
+        base_url=base_url, refresh_token=dracoon.client.connection.refresh_token
+    )
 
+    except HTTPUnauthorizedError as err:
         await graceful_exit(dracoon=dracoon)
 
         err_body = err.error.response.json()
@@ -227,15 +234,18 @@ async def _login_refresh_token(
         else:
             delete_credentials(base_url=base_url)
             typer.echo(format_error_message(msg="Refresh token expired."))
-    except DRACOONHttpError:
-        graceful_exit(dracoon=dracoon)
+    except HTTPBadRequestError as err:
+        await graceful_exit(dracoon=dracoon)
+        err_body = err.error.response.json()
+        if "error" in err_body and err_body["error"] == "invalid_grant":
+            delete_credentials(base_url=base_url)
+            typer.echo(format_error_message(msg="Refresh token expired."))
+            await _login_prompt(base_url=base_url, dracoon=dracoon)
+
+    except DRACOONHttpError as err:
+        await graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="Login failed."))
-
-
-    # store new refresh token
-    store_credentials(
-        base_url=base_url, refresh_token=dracoon.client.connection.refresh_token
-    )
+        raise typer.Abort() from err
 
     return dracoon
 
@@ -246,16 +256,15 @@ async def is_dracoon_url(base_url: str) -> bool:
     if base_url[-1] == "/":
         base_url = base_url[:-1]
 
-    info_url = base_url + "/public/software/version"
+    info_url = base_url + "/api/v4/public/software/version"
 
     async with httpx.AsyncClient() as client:
-
         try:
             res = await client.get(info_url)
             res.raise_for_status()
-        except httpx.ConnectError:
+        except httpx.ConnectError as err:
             return False
-        except DRACOONHttpError:
+        except httpx.HTTPStatusError as err:
             return False
 
     return True

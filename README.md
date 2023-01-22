@@ -216,7 +216,19 @@ Just enter the full new path to create a room.
 The room will be created as a room with inherited permissions from the parent.
 You will need *manage* permission to do so.
 
-It is currently not possible to create a room in the root path.
+To create a room on the root level ('/'), you need to provide an admin user using 
+the corresponding option (`-au` or `--admin-user`):
+
+```bash
+dccmd mkroom -au "admin.username" your-dracoon.domain.com/newroom
+```
+*Note: In order to use the username of an OIDC user, you need to escape the `\`, meaning you need to enter multiple slashes like so: `OIDC\\\user.name`*
+
+To create a room on any level that does *not* inherit permissions, use the `-au` (`--admin-user`) flag and provide the room admin when creating the room as with root level rooms:
+
+```bash
+dccmd mkroom -au "admin.username" your-dracoon.domain.com/parent-room/newroom
+```
 
 ### Delete node
 
@@ -341,6 +353,71 @@ You can delete a user by providing the username:
 dccmd users rm your-dracoon.domain.com/ user123
 ```
 
+### Room permissions management
+
+For an overview of the available commands use 
+
+```bash
+dccmd rooms --help
+```
+
+#### List user / group permissions in a room
+
+To list user permissions in a room, use the `list-users` command:
+
+```bash
+dccmd rooms list-users your-dracoon.domain.com/your-room
+```
+You need minimum `read` permissions to list users.
+
+To list group permissions in a room, use the `list-groups` command:
+
+```bash
+dccmd rooms list-groups your-dracoon.domain.com/your-room
+```
+You need minimum `read` permissions to list groups.
+
+As with other commands, you can use the `--csv` flag to get a csv export for the room
+permissions (users and groups).
+
+#### Add user / group to a room
+
+Currently, the following templates are available:
+- read: read-only perrmissions for a room 
+- edit: edit permissions for a room
+- admin: room admin permissions
+
+The permissions coincide with the templates in use of the official DRACOON Web App.
+
+You need `manage` permissions (room admin) to add users / groups.
+
+To add a user, use the `add-user` command and provide the user and permission template (`-u` and `-p`):
+
+```bash
+dccmd rooms add-user -u "user.name" -p admin your-dracoon.domain.com/your-room
+```
+
+To add a group, use the `add-group` command and provide the group and permission template (`-g` and `-p`):
+
+```bash
+dccmd rooms add-group -g "group.name" -p admin your-dracoon.domain.com/your-room
+```
+
+#### Remove user / group from a room
+
+You need `manage` permissions (room admin) to remove users / groups.
+
+To add a user, use the `remove-user` command and provide the user (`-u`):
+
+```bash
+dccmd rooms remove-user -u "user.name" your-dracoon.domain.com/your-room
+```
+
+To add a group, use the `remove-group` command and provide the group (`-g`):
+
+```bash
+dccmd rooms remove-group -g "group.name" your-dracoon.domain.com/your-room
+```
 
 ## Configuration / administration
 

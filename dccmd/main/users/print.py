@@ -5,20 +5,20 @@ from dracoon.user.responses import UserList, RoleList
 def pretty_print(user_list: UserList):
     """ prints a list of users with regular separator """
     # print header
-    typer.echo("first name | last name | email | username | lastLoginAt | createdAt | isRoomManager | isConfigManager | isUserManager | isGroupManager | isAuditor")
+    typer.echo("id | first name | last name | email | username | lastLoginAt | createdAt | isRoomManager | isConfigManager | isUserManager | isGroupManager | isAuditor")
 
     for user in user_list.items:
         roles = parse_user_roles(user.userRoles)
-        typer.echo(f"{user.firstName} | {user.lastName} | {user.email} | {user.userName} | {user.lastLoginSuccessAt} | {user.createdAt} | {roles['config']} | {roles['user']} | {roles['group']} | {roles['room']} | {roles['audit']}")
+        typer.echo(f"{user.id} | {user.firstName} | {user.lastName} | {user.email} | {user.userName} | {user.lastLoginSuccessAt} | {user.createdAt} | {roles['config']} | {roles['user']} | {roles['group']} | {roles['room']} | {roles['audit']}")
 
 
 def csv_print(user_list: UserList):
     """ prints a list of users with comma separator """
     # print header
-    typer.echo("firstName,lastName,mail,userName,lastLoginAt,createdAt,isConfigManager,isUserManager,isGroupManager,isRoomManager,isAuditor")
+    typer.echo("id,firstName,lastName,mail,userName,lastLoginAt,createdAt,isConfigManager,isUserManager,isGroupManager,isRoomManager,isAuditor")
     for user in user_list.items:
         roles = parse_user_roles(user.userRoles)
-        typer.echo(f"{user.firstName},{user.lastName},{user.email},{user.userName},{user.lastLoginSuccessAt},{user.createdAt},{roles['config']},{roles['user']},{roles['group']},{roles['room']},{roles['audit']}")
+        typer.echo(f"{user.id},{user.firstName},{user.lastName},{user.email},{user.userName},{user.lastLoginSuccessAt},{user.createdAt},{roles['config']},{roles['user']},{roles['group']},{roles['room']},{roles['audit']}")
 
 
 def parse_user_roles(user_roles: RoleList):

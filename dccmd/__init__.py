@@ -4,10 +4,11 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.3.5"
+__version__ = "0.4.0-SNAPSHOT"
 
 # std imports
 import sys
+import os
 import asyncio
 
 # external imports
@@ -26,6 +27,7 @@ import typer
 
 # internal imports
 from dccmd.main.util import (
+    graceful_exit,
     parse_file_name,
     parse_path,
     parse_new_path,
@@ -44,6 +46,8 @@ from dccmd.main.auth.credentials import (
 
 from dccmd.main.crypto import crypto_app
 from dccmd.main.users import users_app
+from dccmd.main.rooms import rooms_app
+from dccmd.main.users.manage import find_user_by_username
 from dccmd.main.crypto.keys import distribute_missing_keys
 from dccmd.main.crypto.util import init_keypair
 from dccmd.main.upload import create_folder_struct, bulk_upload, is_directory, is_file
@@ -57,6 +61,7 @@ app.add_typer(typer_instance=client_app, name="client", help="Manage client info
 app.add_typer(typer_instance=auth_app, name="auth", help="Manage authentication credentials")
 app.add_typer(typer_instance=crypto_app, name="crypto", help="Manage crypto credentials")
 app.add_typer(typer_instance=users_app, name="users", help="Manage users")
+app.add_typer(typer_instance=rooms_app, name="rooms", help="Manage room permissions")
 
 
 @app.command()
@@ -96,7 +101,7 @@ def upload(
         None, help="Password to log in to DRACOON - only works with active cli mode"
     ),
 ):
-    """Upload a file into DRACOON by providing a source path and a target room or folder"""
+    """Upload a file or folder into DRACOON """
 
     async def _upload():
 
@@ -111,15 +116,15 @@ def upload(
 
         # remove base url from path
         parsed_path = parse_path(target_path)
-
+        dracoon.logger.debug(parsed_path)
         node_info = await dracoon.nodes.get_node_from_path(path=parsed_path)
 
         if node_info is None:
+            await dracoon.logout()
             typer.echo(format_error_message(msg=f"Invalid target path: {target_path}"))
             sys.exit(1)
 
         if node_info.isEncrypted is True:
-
             crypto_secret = get_crypto_credentials(base_url)
             await init_keypair(
                 dracoon=dracoon, base_url=base_url, crypto_secret=crypto_secret
@@ -154,7 +159,8 @@ def upload(
         # upload a folder and all related content
         elif is_folder and recursive:
             await create_folder_struct(
-                source=source_dir_path, target=parsed_path, dracoon=dracoon
+                source=source_dir_path, target=parsed_path, dracoon=dracoon,
+                velocity=velocity
             )
             await bulk_upload(
                 source=source_dir_path,
@@ -170,15 +176,19 @@ def upload(
             typer.echo(f'{format_success_message(f"Folder {folder_name} uploaded.")}')
         # upload a single file
         elif is_file_path:
+            file_size = os.path.getsize(source_dir_path)
+            transfer_list = DCTransferList(total=file_size, file_count=1)
+            transfer = DCTransfer(transfer=transfer_list)
             try:
                 await dracoon.upload(
                     file_path=source_dir_path,
                     target_path=parsed_path,
                     resolution_strategy=resolution_strategy,
-                    display_progress=True,
+                    callback_fn=transfer.update,
                     raise_on_err=True,
                 )
             except HTTPUnauthorizedError:
+                await graceful_exit(dracoon=dracoon)
                 delete_credentials(base_url=base_url)
                 format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -191,23 +201,23 @@ def upload(
                         msg="Insufficient permissions (create required)."
                     )
                 )
-                sys.exit(2)
+                sys.exit(1)
             except HTTPConflictError:
                 await dracoon.logout()
                 typer.echo(format_error_message(msg="File already exists."))
-                sys.exit(2)
+                sys.exit(1)
             except InvalidPathError:
                 await dracoon.logout()
                 typer.echo(
                     format_error_message(msg=f"Target path not found. ({target_path})")
                 )
-                sys.exit(2)
+                sys.exit(1)
             except DRACOONHttpError:
                 await dracoon.logout()
                 typer.echo(
                     format_error_message(msg="An error ocurred uploading the file.")
                 )
-                sys.exit(2)
+                sys.exit(1)
 
             try:
                 file_name = parse_file_name(full_path=source_dir_path)
@@ -284,6 +294,7 @@ def mkdir(
         try:
             await dracoon.nodes.create_folder(folder=payload, raise_on_err=True)
         except HTTPUnauthorizedError:
+            await graceful_exit(dracoon=dracoon)
             delete_credentials(base_url=base_url)
             format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -322,6 +333,12 @@ def mkroom(
         ...,
         help="Full path to create a room (inherit permissions) in DRACOON (e.g. dracoon.team/room)",
     ),
+    admin_user: str = typer.Option(
+        None,
+        "--admin-user",
+        "-au",
+        help="Username of the admin user of the room",
+    ),
     cli_mode: bool = typer.Option(
         False, help="When active, accepts username and password"
     ),
@@ -351,28 +368,48 @@ def mkroom(
         # remove base url from path
         parsed_path = parse_new_path(full_path=dir_path)
 
+        if parsed_path != "/":
+            parent_node = await dracoon.nodes.get_node_from_path(path=parsed_path)
+            parent_id = parent_node.id
+        elif parsed_path == "/":
+            parent_node = None
+            parent_id = 0
+
         room_name = parse_file_name(full_path=dir_path)
 
-        parent_node = await dracoon.nodes.get_node_from_path(path=parsed_path)
-
-        if parent_node is None:
+        if parsed_path != "/" and parent_node is None:
             await dracoon.logout()
             typer.echo(format_error_message(msg=f"Node not found: {parsed_path}"))
             sys.exit(1)
-        if parent_node.type != NodeType.room:
+        if parent_node and parent_node.type != NodeType.room:
             await dracoon.logout()
             typer.echo(
                 format_error_message(msg=f"Parent path must be a room: {parsed_path}")
             )
             sys.exit(1)
 
-        payload = dracoon.nodes.make_room(
-            name=room_name, parent_id=parent_node.id, inherit_perms=True
-        )
+        if not admin_user and parent_id == 0:
+            await dracoon.logout()
+            typer.echo(
+                format_error_message(msg="An admin user must be provided on root path.")
+            )
+            sys.exit(1)
+
+        if admin_user and parent_id != 0:
+            user_info = await find_user_by_username(dracoon=dracoon, user_name=admin_user, as_user_manager=False, room_id=parent_id)
+            payload = dracoon.nodes.make_room(name=room_name, parent_id=parent_id, inherit_perms=False, admin_ids=[user_info.userInfo.id])
+        if admin_user and parent_id == 0:
+            user_info = await find_user_by_username(dracoon=dracoon, user_name=admin_user)
+            payload = dracoon.nodes.make_room(name=room_name, inherit_perms=False, admin_ids=[user_info.id], parent_id=None)
+        else:
+            payload = dracoon.nodes.make_room(
+            name=room_name, parent_id=parent_id, inherit_perms=True
+            )
 
         try:
             await dracoon.nodes.create_room(room=payload, raise_on_err=True)
         except HTTPUnauthorizedError:
+            await graceful_exit(dracoon=dracoon)
             delete_credentials(base_url=base_url)
             format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -485,6 +522,7 @@ def rm(
         try:
             await dracoon.nodes.delete_node(node_id=node.id, raise_on_err=True)
         except HTTPUnauthorizedError:
+            await graceful_exit(dracoon=dracoon)
             delete_credentials(base_url=base_url)
             format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -549,6 +587,9 @@ def ls(
     all_items: bool = typer.Option(
         False, help="When active, returns all items without prompt"
     ),
+    room_manager: bool = typer.Option(
+        False, help="When active, returns all nodes as room admin / manager"
+    ),
     username: str = typer.Argument(
         None, help="Username to log in to DRACOON - only works with active cli mode"
     ),
@@ -594,8 +635,9 @@ def ls(
             )
             sys.exit(1)
         try:
-            nodes = await dracoon.nodes.get_nodes(parent_id=parent_id, raise_on_err=True)
+            nodes = await dracoon.nodes.get_nodes(parent_id=parent_id, room_manager=room_manager, raise_on_err=True)
         except HTTPUnauthorizedError:
+            await graceful_exit(dracoon=dracoon)
             delete_credentials(base_url=base_url)
             format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -626,7 +668,6 @@ def ls(
             )
             sys.exit(1)
 
-
         # handle more than 500 items
         if nodes.range.total > 500:
             if not all_items:
@@ -643,10 +684,11 @@ def ls(
             for offset in range(500, nodes.range.total, 500):
                 try:
                     nodes_res = await dracoon.nodes.get_nodes(
-                        parent_id=parent_id, offset=offset, raise_on_err=True
+                        parent_id=parent_id, offset=offset, room_manager=room_manager, raise_on_err=True
                     )
                     nodes.items.extend(nodes_res.items)
                 except HTTPUnauthorizedError:
+                    await graceful_exit(dracoon=dracoon)
                     delete_credentials(base_url=base_url)
                     format_error_message(
                             msg="Re-authentication required - please run operation again with new login."
@@ -728,8 +770,7 @@ def download(
     ),
 ):
     """
-    Download a file from DRACOON by providing a source path
-    and a target directory / path for the file
+    Download a file, folder or room from DRACOON 
     """
 
     async def _download():
@@ -751,6 +792,7 @@ def download(
         node_info = await dracoon.nodes.get_node_from_path(path=parsed_path)
 
         if not node_info:
+            await dracoon.logout()
             typer.echo(format_error_message(msg=f"Node not found ({parsed_path})."))
             sys.exit(1)
 
@@ -792,6 +834,7 @@ def download(
                     f'{format_success_message(f"{node_info.type.value} {node_info.name} downloaded to {target_dir_path}.")}'
                 )
             except HTTPUnauthorizedError:
+                await graceful_exit(dracoon=dracoon)
                 delete_credentials(base_url=base_url)
                 format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -833,11 +876,13 @@ def download(
             )
             # to do: replace with handling via PermissionError
             except UnboundLocalError:
+                await dracoon.logout()
                 typer.echo(
                 format_error_message(msg=f"Insufficient permissions on target path ({target_dir_path})")
                 )
                 sys.exit(1)
             except InvalidPathError:
+                await dracoon.logout()
                 typer.echo(
                 format_error_message(msg=f"Path must be a folder ({target_dir_path})")
                 )
@@ -847,6 +892,7 @@ def download(
                 typer.echo(format_error_message(msg=f"File does not exist ({parsed_path})"))
                 sys.exit(1)
             except FileConflictError:
+                await dracoon.logout()
                 typer.echo(
                     format_error_message(
                         msg=f"File already exists on target path ({target_dir_path})"
@@ -854,6 +900,7 @@ def download(
                 )
                 sys.exit(1)
             except HTTPUnauthorizedError:
+                await graceful_exit(dracoon=dracoon)
                 delete_credentials(base_url=base_url)
                 format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -871,27 +918,12 @@ def download(
                     )
                 )
                 sys.exit(1)
-            except TimeoutError:
-                typer.echo(
-                    format_error_message(
-                        msg="Connection timeout - could not download file."
-                    )
-                )
-                sys.exit(1)
-            except ConnectError:
-                typer.echo(
-                    format_error_message(
-                        msg="Connection error - could not download file."
-                    )
-                )
-                sys.exit(1)
             except KeyboardInterrupt:
                 await dracoon.logout()
                 typer.echo(
                 f'{format_success_message(f"Download canceled ({file_name}).")}'
             )
-            finally:
-                await dracoon.logout()
+
 
 
     asyncio.run(_download())
@@ -903,7 +935,36 @@ def version():
     Dsiplay current version of DRACOON Commander
     """
 
-    typer.echo(f"DRACOON Commander (dccmd) version {__version__}")
+    typer.echo(
+               "@@@@@@@@@@@@@@@@@@      @@@@@@@@@@@@@@@@@@      @@@@@@@@@@@@@@@@@@      @@@@@@@@@        @@@@@@@@@   @@@@@@@@@@@@@@@@@@\n"                                               
+               "@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@      @@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@@    @@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@@@@@   @@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@ @@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@                @@@@@@@@                @@@@@@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@     @@@@@@@@   @@@@@@@@      @@@@@@@@  @@@@@@@@ @@@@@@@@@@@@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@     @@@@@@@@   @@@@@@@@     @@@@@@@@   @@@@@@@@      @@@@@@@@  @@@@@@@@  @@@@@@@@ @@@@@@@   @@@@@@@@     @@@@@@@@\n"                                           
+               "@@@@@@@@ @@@@@@@@@@@@   @@@@@@@@  @@@@@@@@@@@   @@@@@@@@@@@   @@@@@@@@  @@@@@@@@  @@@@@@@  @@@@@@@   @@@@@@@@@@@  @@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@   @@@@@@@@@@@@@@@@@@@@@@  @@@@@@@@   @@@@@   @@@@@@@   @@@@@@@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@@@@@@@     @@@@@@@@@@@@@@@@@@@@      @@@@@@@@@@@@@@@@@@@@    @@@@@@    @@@    @@@@@@@    @@@@@@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@@@@        @@@@@@@@@@@@@@@@             @@@@@@@@@@@@@@@@@       @@@     @     @@@@@@@        @@@@@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@@@@           @@@@@@@@@@@@@                   @@@@@@@@@@@@@@                     @@@@@@@           @@@@@@@@@@@@@\n"                                           
+               "@@@@@@@@@@              @@@@@@@@@@                          @@@@@@@@@@                     @@@@@@@              @@@@@@@@@@\n"                                           
+               "@@@@@@@                 @@@@@@@                                @@@@@@@                     @@@@@@@                 @@@@@@@\n"                                           
+               "@@@@                    @@@@                                      @@@@                     @@@@@@@                    @@@@\n"                                           
+               "@                       @                                            @                        @@@@                       @\n"                                           
+                                                                                                                                                         
+    )
+
+    typer.echo(f"                        DRACOON Commander (dccmd) version {__version__}")
+    typer.echo("                        Octavio Simone 2022")
+    typer.echo("                        https://github.com/unbekanntes-pferd/dccmd")
 
 
 if __name__ == "__main__":

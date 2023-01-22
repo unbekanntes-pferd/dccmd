@@ -18,7 +18,7 @@ async def get_keypair(dracoon: DRACOON, crypto_secret: str):
     except ValueError:
         await graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="Encryption password is incorrect."))
-        sys.exit(2)
+        sys.exit(1)
     except HTTPNotFoundError:
         await graceful_exit(dracoon=dracoon)
         typer.echo(
@@ -26,11 +26,11 @@ async def get_keypair(dracoon: DRACOON, crypto_secret: str):
                 msg="No keypair set - keypair required to work with encrypted rooms."
             )
         )
-        sys.exit(2)
+        sys.exit(1)
     except DRACOONHttpError:
         await graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="An error ocurred getting the keypair."))
-        sys.exit(2)
+        sys.exit(1)
 
 async def init_keypair(dracoon: DRACOON, base_url: str, crypto_secret: str = None):
     """ handle keypair storage """
