@@ -169,14 +169,22 @@ def is_win32() -> bool:
     return platform.system() == "Windows"
 
 
-async def create_folder_struct(source: str, target: str, dracoon: DRACOON):
+async def create_folder_struct(source: str, target: str, dracoon: DRACOON, velocity: int = 2):
     """create all necessary folders for a recursive folder upload"""
+
+    if velocity > 10:
+        velocity = 10
+    elif velocity < 1:
+        velocity = 1
 
     async def process_batch(batch):
         """process a batch of folders to create"""
 
-        path = target + batch[0].parent_path
+        path = target + '/' + batch[0].parent_path
         parent_node = await dracoon.nodes.get_node_from_path(path)
+
+        if parent_node is None:
+            dracoon.logger.debug(path)
 
         parent_id = parent_node.id
 
@@ -187,7 +195,7 @@ async def create_folder_struct(source: str, target: str, dracoon: DRACOON):
         ]
 
         # process 10 folders per batch
-        for reqs in dracoon.batch_process(coro_list=folder_reqs, batch_size=10):
+        for reqs in dracoon.batch_process(coro_list=folder_reqs, batch_size=velocity):
             try:
                 await asyncio.gather(*reqs)
             except HTTPConflictError:
@@ -264,14 +272,15 @@ async def bulk_upload(
 
     for item in file_list.file_list:
         upload_job = DCTransfer(transfer=transfer_list)
+        dracoon.logger.info(target + '/' + item.parent_path)
+        dracoon.logger.info(item.dir_path)
         req = dracoon.upload(
             file_path=item.dir_path,
-            target_path=(target + item.parent_path),
+            target_path=(target + '/' + item.parent_path),
             resolution_strategy=resolution_strategy,
-            display_progress=False,
-            callback_fn=upload_job.update     
+            callback_fn=upload_job.update
         )
-        upload_reqs.append(req)
+        upload_reqs.append(asyncio.ensure_future(req))
 
     for batch in dracoon.batch_process(
             coro_list=upload_reqs, batch_size=concurrent_reqs
@@ -282,19 +291,23 @@ async def bulk_upload(
             # ignore file already exists error
             continue
         except HTTPForbiddenError:
+            for req in upload_reqs:
+                req.cancel()
             await dracoon.logout()
             typer.echo(
                     format_error_message(
                         msg="Insufficient permissions (create / esdit required)."
                     )
                 )
-            sys.exit(2)
+            sys.exit(1)
         except DRACOONHttpError:
+            for req in upload_reqs:
+                req.cancel()
             await dracoon.logout()
             typer.echo(
                     format_error_message(msg="An error ocurred uploading files.")
                 )
-            sys.exit(2)
+            sys.exit(1)
         except WriteTimeout:
             continue
 
@@ -303,5 +316,4 @@ def create_folder(name: str, parent_id: int, dracoon: DRACOON):
     """helper to create folder creation requests"""
 
     folder = dracoon.nodes.make_folder(name=name, parent_id=parent_id)
-
     return dracoon.nodes.create_folder(folder=folder, raise_on_err=True)

@@ -2,8 +2,10 @@ import asyncio
 import sys
 import typer
 
+from dracoon.nodes.models import NodeType
+
 from dccmd.main.auth.util import init_dracoon
-from dccmd.main.util import format_error_message, parse_path
+from dccmd.main.util import format_error_message, format_success_message, parse_path
 
 from .print import (pretty_print_group_perms, pretty_print_user_perms,
                     csv_print_group_perms, csv_print_user_perms)
@@ -60,13 +62,16 @@ def add_user(
 
         node_info = await dracoon.nodes.get_node_from_path(path=parsed_path)
 
-        if node_info is None or node_info.type != 'room':
+        if node_info is None or node_info.type != NodeType.room:
+            await dracoon.logout()
             typer.echo(format_error_message(msg=f"Invalid target path: {source_path}"))
             sys.exit(1)
 
         perms = parse_permissions_template(perms=permission)
 
         await add_room_user(room_id=node_info.id, username=user, permission_template=perms, dracoon=dracoon)
+        await dracoon.logout()
+        typer.echo(format_success_message(f"Added user {user} with permission {permission} to room {node_info.name}."))
 
     asyncio.run(_add_user())
 
@@ -117,13 +122,16 @@ def add_group(
 
         node_info = await dracoon.nodes.get_node_from_path(path=parsed_path)
 
-        if node_info is None or node_info.type != 'room':
+        if node_info is None or node_info.type != NodeType.room:
+            await dracoon.logout()
             typer.echo(format_error_message(msg=f"Invalid target path: {source_path}"))
             sys.exit(1)
 
         perms = parse_permissions_template(perms=permission)
 
         await add_room_group(room_id=node_info.id, name=group, permission_template=perms, dracoon=dracoon)
+        await dracoon.logout()
+        typer.echo(format_success_message(f"Added group {group} with permission {permission} to room {node_info.name}."))
 
     asyncio.run(_add_group())
 
@@ -165,14 +173,16 @@ def remove_user(
 
         # remove base url from path
         parsed_path = parse_path(source_path)
-
         node_info = await dracoon.nodes.get_node_from_path(path=parsed_path)
 
-        if node_info is None or node_info.type != 'room':
+        if node_info is None or node_info.type != NodeType.room:
+            await dracoon.logout()
             typer.echo(format_error_message(msg=f"Invalid target path: {source_path}"))
             sys.exit(1)
 
         await remove_room_user(room_id=node_info.id, username=user, dracoon=dracoon)
+        await dracoon.logout()
+        typer.echo(format_success_message(f"Removed user {user} from room {node_info.name}."))
 
     asyncio.run(_remove_user())
 
@@ -217,11 +227,15 @@ def remove_group(
 
         node_info = await dracoon.nodes.get_node_from_path(path=parsed_path)
 
-        if node_info is None or node_info.type != 'room':
+        if node_info is None or node_info.type != NodeType.room:
+            await dracoon.logout()
             typer.echo(format_error_message(msg=f"Invalid target path: {source_path}"))
             sys.exit(1)
 
         await remove_room_group(room_id=node_info.id, name=group, dracoon=dracoon)
+
+        await dracoon.logout()
+        typer.echo(format_success_message(f"Removed group {group} from room {node_info.name}."))
 
     asyncio.run(_remove_group())
 
@@ -260,10 +274,12 @@ def list_users(
 
         # remove base url from path
         parsed_path = parse_path(source_path)
-
+        dracoon.logger.debug(parsed_path)
         node_info = await dracoon.nodes.get_node_from_path(path=parsed_path)
 
-        if node_info is None or node_info.type != 'room':
+
+        if node_info is None or node_info.type != NodeType.room:
+            await dracoon.logout()
             typer.echo(format_error_message(msg=f"Invalid target path: {source_path}"))
             sys.exit(1)
 
@@ -273,6 +289,8 @@ def list_users(
             csv_print_user_perms(user_permissions=user_permissions)
         else:
             pretty_print_user_perms(user_permissions=user_permissions)
+        
+        await dracoon.logout()
 
     asyncio.run(_list_users())
 
@@ -314,7 +332,8 @@ def list_groups(
 
         node_info = await dracoon.nodes.get_node_from_path(path=parsed_path)
 
-        if node_info is None or node_info.type != 'room':
+        if node_info is None or node_info.type != NodeType.room:
+            await dracoon.logout()
             typer.echo(format_error_message(msg=f"Invalid target path: {source_path}"))
             sys.exit(1)
 
@@ -324,6 +343,8 @@ def list_groups(
             csv_print_group_perms(group_permissions=group_permissions)
         else:
             pretty_print_group_perms(group_permissions=group_permissions)
+        
+        await dracoon.logout()
 
     asyncio.run(_list_groups())
 

@@ -46,6 +46,4 @@ class DCTransfer(TransferJob):
 
         if self.progress == 1:
             self.transfer.update_file_count()
-
-
     

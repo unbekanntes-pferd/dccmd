@@ -9,7 +9,8 @@ import typer
 
 from dracoon import DRACOON
 from dracoon.errors import HTTPForbiddenError, HTTPNotFoundError, DRACOONHttpError
-from dracoon.nodes.models import Permissions, UpdateRoomUsers, UpdateRoomGroups
+from dracoon.nodes.models import (Permissions, UpdateRoomUsers, UpdateRoomGroups, 
+                                  UpdateRoomGroupItem, UpdateRoomUserItem)
 from dracoon.nodes.responses import RoomGroup, RoomGroupList, RoomUserList
 
 from dccmd.main.models.errors import DCInvalidArgumentError
@@ -86,8 +87,8 @@ async def add_room_user(room_id: int, username: str, permission_template: Permis
     user = await find_user_by_username(dracoon=dracoon, user_name=username, as_user_manager=False, room_id=room_id)
     permissions = create_permissions(permissions=permission_template, dracoon=dracoon)
 
-    user_update = dracoon.nodes.make_permission_update(id=user.id, permission=permissions)
-    users_update = UpdateRoomUsers(items=[user_update])
+    #user_update = dracoon.nodes.make_permission_update(id=user.userInfo.id, permission=permissions)
+    users_update = UpdateRoomUsers(items=[UpdateRoomUserItem(id=user.userInfo.id, permissions=permissions)])
     try:
         await dracoon.nodes.update_room_users(room_id=room_id, users_update=users_update)
     except HTTPForbiddenError:
@@ -115,15 +116,15 @@ async def add_room_user(room_id: int, username: str, permission_template: Permis
             )
         sys.exit(1)
 
-
 async def add_room_group(room_id: int, name: str, permission_template: PermissionTemplate, dracoon: DRACOON):
     """ assign a group to a room """
     group = await get_group_by_name(room_id=room_id, name=name, dracoon=dracoon)
     permissions = create_permissions(permissions=permission_template, dracoon=dracoon)
-    group_update = dracoon.nodes.make_permission_update(id=group.id, permission=permissions)
-    groups_update = UpdateRoomGroups(items=[group_update])
+    #group_update = dracoon.nodes.make_permission_update(id=group.id, permission=permissions)
+    groups_update = UpdateRoomGroups(items=[UpdateRoomGroupItem(id=group.id, permissions=permissions)])
+    dracoon.logger.debug(groups_update)
     try:
-        await dracoon.nodes.update_room_groups(room_id=room_id, users_update=groups_update)
+        await dracoon.nodes.update_room_groups(room_id=room_id, groups_update=groups_update)
     except HTTPForbiddenError:
         await dracoon.logout()
         typer.echo(
@@ -151,10 +152,10 @@ async def add_room_group(room_id: int, name: str, permission_template: Permissio
 
 async def remove_room_user(room_id: int, username: str, dracoon: DRACOON):
     """ remove user from room """
-    user = find_user_by_username(dracoon=dracoon, user_name=username, as_user_manager=False, room_id=room_id)
+    user = await find_user_by_username(dracoon=dracoon, user_name=username, as_user_manager=False, room_id=room_id)
 
     try:
-        await dracoon.nodes.delete_room_users(room_id=room_id, user_list=[user.id])
+        await dracoon.nodes.delete_room_users(room_id=room_id, user_list=[user.userInfo.id])
     except HTTPForbiddenError:
         await dracoon.logout()
         typer.echo(
@@ -183,7 +184,7 @@ async def remove_room_user(room_id: int, username: str, dracoon: DRACOON):
 
 async def remove_room_group(room_id: int, name: str, dracoon: DRACOON):
     """ remove group from room """
-    group = get_group_by_name(room_id=room_id, name=name, dracoon=dracoon)
+    group = await get_group_by_name(room_id=room_id, name=name, dracoon=dracoon)
 
     try:
         await dracoon.nodes.delete_room_groups(room_id=room_id, group_list=[group.id])
@@ -214,7 +215,7 @@ async def remove_room_group(room_id: int, name: str, dracoon: DRACOON):
 
 async def get_group_by_name(room_id: int, name: str, dracoon: DRACOON) -> RoomGroup:
     """ get a group by name """
-    search_filter = f"name:cn:{name}|isGranted:eq:false"
+    search_filter = f"name:cn:{name}|isGranted:eq:any"
     try:
         group_list = await dracoon.nodes.get_room_groups(room_id=room_id, filter=search_filter)
     except HTTPForbiddenError:
@@ -274,6 +275,7 @@ def set_room_admin_perms(permissions: Permissions):
 
 def create_permissions(permissions: PermissionTemplate, dracoon: DRACOON) -> Permissions:
     """ create permission payload from template """
+
     perms = dracoon.nodes.make_permissions(manage=False, read=False, create=False, change=False, delete=False, manage_shares=False, 
                                            manage_file_requests=False, delete_recycle_bin=False, restore_recycle_bin=False, 
                                            read_recycle_bin=False)
@@ -282,18 +284,18 @@ def create_permissions(permissions: PermissionTemplate, dracoon: DRACOON) -> Per
         raise DCInvalidArgumentError
 
     if permissions == PermissionTemplate.READ:
-        set_read_perms(permissions=permissions)
+        set_read_perms(permissions=perms)
 
     if permissions == PermissionTemplate.EDIT:
-        set_read_perms(permissions=permissions)
-        set_edit_perms(permissions=permissions)
+        set_read_perms(permissions=perms)
+        set_edit_perms(permissions=perms)
 
 
     if permissions == PermissionTemplate.ROOM_ADMIN:
-        set_read_perms(permissions=permissions)
-        set_read_perms(permissions=permissions)
-        set_room_admin_perms(permissions=permissions)
-
+        set_read_perms(permissions=perms)
+        set_read_perms(permissions=perms)
+        set_room_admin_perms(permissions=perms)
+    
     return perms
 
 def parse_permissions_template(perms: str) -> PermissionTemplate:

@@ -8,6 +8,7 @@ __version__ = "0.4.0-SNAPSHOT"
 
 # std imports
 import sys
+import os
 import asyncio
 
 # external imports
@@ -26,6 +27,7 @@ import typer
 
 # internal imports
 from dccmd.main.util import (
+    graceful_exit,
     parse_file_name,
     parse_path,
     parse_new_path,
@@ -114,15 +116,15 @@ def upload(
 
         # remove base url from path
         parsed_path = parse_path(target_path)
-
+        dracoon.logger.debug(parsed_path)
         node_info = await dracoon.nodes.get_node_from_path(path=parsed_path)
 
         if node_info is None:
+            await dracoon.logout()
             typer.echo(format_error_message(msg=f"Invalid target path: {target_path}"))
             sys.exit(1)
 
         if node_info.isEncrypted is True:
-
             crypto_secret = get_crypto_credentials(base_url)
             await init_keypair(
                 dracoon=dracoon, base_url=base_url, crypto_secret=crypto_secret
@@ -157,7 +159,8 @@ def upload(
         # upload a folder and all related content
         elif is_folder and recursive:
             await create_folder_struct(
-                source=source_dir_path, target=parsed_path, dracoon=dracoon
+                source=source_dir_path, target=parsed_path, dracoon=dracoon,
+                velocity=velocity
             )
             await bulk_upload(
                 source=source_dir_path,
@@ -173,15 +176,19 @@ def upload(
             typer.echo(f'{format_success_message(f"Folder {folder_name} uploaded.")}')
         # upload a single file
         elif is_file_path:
+            file_size = os.path.getsize(source_dir_path)
+            transfer_list = DCTransferList(total=file_size, file_count=1)
+            transfer = DCTransfer(transfer=transfer_list)
             try:
                 await dracoon.upload(
                     file_path=source_dir_path,
                     target_path=parsed_path,
                     resolution_strategy=resolution_strategy,
-                    display_progress=True,
+                    callback_fn=transfer.update,
                     raise_on_err=True,
                 )
             except HTTPUnauthorizedError:
+                await graceful_exit(dracoon=dracoon)
                 delete_credentials(base_url=base_url)
                 format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -194,23 +201,23 @@ def upload(
                         msg="Insufficient permissions (create required)."
                     )
                 )
-                sys.exit(2)
+                sys.exit(1)
             except HTTPConflictError:
                 await dracoon.logout()
                 typer.echo(format_error_message(msg="File already exists."))
-                sys.exit(2)
+                sys.exit(1)
             except InvalidPathError:
                 await dracoon.logout()
                 typer.echo(
                     format_error_message(msg=f"Target path not found. ({target_path})")
                 )
-                sys.exit(2)
+                sys.exit(1)
             except DRACOONHttpError:
                 await dracoon.logout()
                 typer.echo(
                     format_error_message(msg="An error ocurred uploading the file.")
                 )
-                sys.exit(2)
+                sys.exit(1)
 
             try:
                 file_name = parse_file_name(full_path=source_dir_path)
@@ -287,6 +294,7 @@ def mkdir(
         try:
             await dracoon.nodes.create_folder(folder=payload, raise_on_err=True)
         except HTTPUnauthorizedError:
+            await graceful_exit(dracoon=dracoon)
             delete_credentials(base_url=base_url)
             format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -401,6 +409,7 @@ def mkroom(
         try:
             await dracoon.nodes.create_room(room=payload, raise_on_err=True)
         except HTTPUnauthorizedError:
+            await graceful_exit(dracoon=dracoon)
             delete_credentials(base_url=base_url)
             format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -513,6 +522,7 @@ def rm(
         try:
             await dracoon.nodes.delete_node(node_id=node.id, raise_on_err=True)
         except HTTPUnauthorizedError:
+            await graceful_exit(dracoon=dracoon)
             delete_credentials(base_url=base_url)
             format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -627,6 +637,7 @@ def ls(
         try:
             nodes = await dracoon.nodes.get_nodes(parent_id=parent_id, room_manager=room_manager, raise_on_err=True)
         except HTTPUnauthorizedError:
+            await graceful_exit(dracoon=dracoon)
             delete_credentials(base_url=base_url)
             format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -677,6 +688,7 @@ def ls(
                     )
                     nodes.items.extend(nodes_res.items)
                 except HTTPUnauthorizedError:
+                    await graceful_exit(dracoon=dracoon)
                     delete_credentials(base_url=base_url)
                     format_error_message(
                             msg="Re-authentication required - please run operation again with new login."
@@ -780,6 +792,7 @@ def download(
         node_info = await dracoon.nodes.get_node_from_path(path=parsed_path)
 
         if not node_info:
+            await dracoon.logout()
             typer.echo(format_error_message(msg=f"Node not found ({parsed_path})."))
             sys.exit(1)
 
@@ -821,6 +834,7 @@ def download(
                     f'{format_success_message(f"{node_info.type.value} {node_info.name} downloaded to {target_dir_path}.")}'
                 )
             except HTTPUnauthorizedError:
+                await graceful_exit(dracoon=dracoon)
                 delete_credentials(base_url=base_url)
                 format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
@@ -886,7 +900,7 @@ def download(
                 )
                 sys.exit(1)
             except HTTPUnauthorizedError:
-                await dracoon.logout()
+                await graceful_exit(dracoon=dracoon)
                 delete_credentials(base_url=base_url)
                 format_error_message(
                         msg="Re-authentication required - please run operation again with new login."
