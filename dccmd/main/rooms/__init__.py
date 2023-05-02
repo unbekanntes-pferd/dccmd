@@ -289,7 +289,7 @@ def list_users(
             csv_print_user_perms(user_permissions=user_permissions)
         else:
             pretty_print_user_perms(user_permissions=user_permissions)
-        
+
         await dracoon.logout()
 
     asyncio.run(_list_users())
@@ -343,7 +343,7 @@ def list_groups(
             csv_print_group_perms(group_permissions=group_permissions)
         else:
             pretty_print_group_perms(group_permissions=group_permissions)
-        
+
         await dracoon.logout()
 
     asyncio.run(_list_groups())

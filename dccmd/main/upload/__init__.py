@@ -85,7 +85,6 @@ class FileItem:
         self.size = os.path.getsize(self.dir_path)
         self.x_size = self.x_path.stat().st_size
 
-
 class FileItemList:
     """object representing all files in a path (recursively)"""
 
@@ -100,6 +99,11 @@ class FileItemList:
             FileItem(dir_path, source_path)
             for dir_path in fast_scanfile(dirname=source_path)
         ]
+
+        self.ignored_files = [file_item for file_item in self.file_list if not validate_file_name(file_item.name)]
+        # reject invalid file names
+        self.file_list = [file_item for file_item in self.file_list if validate_file_name(file_item.name)]
+
         # get unique levels
         self.levels = set([file_item.level for file_item in self.file_list])
 
@@ -120,7 +124,7 @@ class FileItemList:
     def total_size(self):
         """ return total size in bytes """
         return sum([item.size for item in self.file_list])
-    
+
 def convert_to_dir_items(dir_list: list[str], base_dir: str) -> list[DirectoryItem]:
     """convert a list of paths to a list of directory items (helper class)"""
 
@@ -180,7 +184,7 @@ async def create_folder_struct(source: str, target: str, dracoon: DRACOON, veloc
     async def process_batch(batch):
         """process a batch of folders to create"""
 
-        path = target + '/' + batch[0].parent_path
+        path = target.rstrip('/') + '/' + batch[0].parent_path.lstrip('/')
         parent_node = await dracoon.nodes.get_node_from_path(path)
 
         if parent_node is None:
@@ -258,6 +262,12 @@ async def bulk_upload(
     """upload a list of files in a given source path"""
 
     file_list = FileItemList(source_path=source)
+
+    dracoon.logger.info(f"Ignored files: {len(file_list.ignored_files)}")
+
+    for file in file_list.ignored_files:
+        dracoon.logger.info(f"Ignoring file: {file.dir_path}")
+
     file_list.sort_by_size()
     transfer_list = DCTransferList(total=file_list.total_size, file_count=file_list.file_count)
 
@@ -272,11 +282,12 @@ async def bulk_upload(
 
     for item in file_list.file_list:
         upload_job = DCTransfer(transfer=transfer_list)
-        dracoon.logger.info(target + '/' + item.parent_path)
-        dracoon.logger.info(item.dir_path)
+        dracoon.logger.debug(target + '/' + item.parent_path)
+        dracoon.logger.debug(item.dir_path)
+        target_path = target.rstrip('/') + '/' + item.parent_path.lstrip('/')
         req = dracoon.upload(
             file_path=item.dir_path,
-            target_path=(target + '/' + item.parent_path),
+            target_path=(target_path),
             resolution_strategy=resolution_strategy,
             callback_fn=upload_job.update
         )
@@ -317,3 +328,11 @@ def create_folder(name: str, parent_id: int, dracoon: DRACOON):
 
     folder = dracoon.nodes.make_folder(name=name, parent_id=parent_id)
     return dracoon.nodes.create_folder(folder=folder, raise_on_err=True)
+
+def validate_file_name(name: str) -> str:
+    """ validate file name """
+    # return false if name length is more than 150 chars
+    if len(name) > 150:
+        return False
+
+    return True
