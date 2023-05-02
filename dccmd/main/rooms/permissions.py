@@ -122,7 +122,7 @@ async def add_room_group(room_id: int, name: str, permission_template: Permissio
     permissions = create_permissions(permissions=permission_template, dracoon=dracoon)
     #group_update = dracoon.nodes.make_permission_update(id=group.id, permission=permissions)
     groups_update = UpdateRoomGroups(items=[UpdateRoomGroupItem(id=group.id, permissions=permissions)])
-    dracoon.logger.debug(groups_update)
+
     try:
         await dracoon.nodes.update_room_groups(room_id=room_id, groups_update=groups_update)
     except HTTPForbiddenError:
@@ -276,8 +276,8 @@ def set_room_admin_perms(permissions: Permissions):
 def create_permissions(permissions: PermissionTemplate, dracoon: DRACOON) -> Permissions:
     """ create permission payload from template """
 
-    perms = dracoon.nodes.make_permissions(manage=False, read=False, create=False, change=False, delete=False, manage_shares=False, 
-                                           manage_file_requests=False, delete_recycle_bin=False, restore_recycle_bin=False, 
+    perms = dracoon.nodes.make_permissions(manage=False, read=False, create=False, change=False, delete=False, manage_shares=False,
+                                           manage_file_requests=False, delete_recycle_bin=False, restore_recycle_bin=False,
                                            read_recycle_bin=False)
 
     if not isinstance(permissions, PermissionTemplate):
@@ -295,7 +295,7 @@ def create_permissions(permissions: PermissionTemplate, dracoon: DRACOON) -> Per
         set_read_perms(permissions=perms)
         set_read_perms(permissions=perms)
         set_room_admin_perms(permissions=perms)
-    
+
     return perms
 
 def parse_permissions_template(perms: str) -> PermissionTemplate:
