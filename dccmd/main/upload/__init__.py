@@ -12,7 +12,7 @@ from pathlib import Path
 
 import typer
 from httpx import WriteTimeout
-from dracoon import DRACOON
+from dracoon import DRACOON, OAuth2ConnectionType
 from dracoon.errors import (
     InvalidPathError,
     HTTPConflictError,
@@ -201,6 +201,8 @@ async def create_folder_struct(source: str, target: str, dracoon: DRACOON, veloc
         # process 10 folders per batch
         for reqs in dracoon.batch_process(coro_list=folder_reqs, batch_size=velocity):
             try:
+                # get new token to avoid rate limiting
+                await dracoon.connect(connection_type=OAuth2ConnectionType.refresh_token)
                 await asyncio.gather(*reqs)
             except HTTPConflictError:
                 pass
@@ -242,6 +244,7 @@ async def create_folder_struct(source: str, target: str, dracoon: DRACOON, veloc
             # process 3 batches in parallel per level
             for batch in dracoon.batch_process(coro_list=folder_reqs, batch_size=3):
                 try:
+                    await dracoon.connect(connection_type=OAuth2ConnectionType.refresh_token)
                     await asyncio.gather(*batch)
                 except DRACOONHttpError:
                     for req in folder_reqs:
@@ -297,6 +300,8 @@ async def bulk_upload(
             coro_list=upload_reqs, batch_size=concurrent_reqs
         ):
         try:
+            # get fresh token per batch (avoid rate limiting)
+            await dracoon.connect(connection_type=OAuth2ConnectionType.refresh_token)
             await asyncio.gather(*batch)
         except HTTPConflictError:
             # ignore file already exists error
@@ -329,7 +334,7 @@ def create_folder(name: str, parent_id: int, dracoon: DRACOON):
     folder = dracoon.nodes.make_folder(name=name, parent_id=parent_id)
     return dracoon.nodes.create_folder(folder=folder, raise_on_err=True)
 
-def validate_file_name(name: str) -> str:
+def validate_file_name(name: str) -> bool:
     """ validate file name """
     # return false if name length is more than 150 chars
     if len(name) > 150:
