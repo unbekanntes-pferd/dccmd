@@ -4,7 +4,7 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.4.2-SNAPSHOT"
+__version__ = "0.4.2"
 
 # std imports
 import sys
@@ -236,8 +236,10 @@ def upload(
             distrib_node_id = node_info.authParentId
         if node_info.type == NodeType.room:
             distrib_node_id = node_info.id
+        else:
+            distrib_node_id = None
 
-        if node_info.isEncrypted is True:
+        if node_info.isEncrypted is True and distrib_node_id is not None:
             await distribute_missing_keys(dracoon=dracoon, room_id=distrib_node_id)
 
         await dracoon.logout()
@@ -368,12 +370,12 @@ def mkroom(
         # remove base url from path
         parsed_path = parse_new_path(full_path=dir_path)
 
-        if parsed_path != "/":
-            parent_node = await dracoon.nodes.get_node_from_path(path=parsed_path)
-            parent_id = parent_node.id
-        elif parsed_path == "/":
+        if parsed_path == "/":
             parent_node = None
             parent_id = 0
+        else:
+            parent_node = await dracoon.nodes.get_node_from_path(path=parsed_path)
+            parent_id = parent_node.id
 
         room_name = parse_file_name(full_path=dir_path)
 
@@ -397,10 +399,10 @@ def mkroom(
 
         if admin_user and parent_id != 0:
             user_info = await find_user_by_username(dracoon=dracoon, user_name=admin_user, as_user_manager=False, room_id=parent_id)
-            payload = dracoon.nodes.make_room(name=room_name, parent_id=parent_id, inherit_perms=False, admin_ids=[user_info.userInfo.id])
+            payload = dracoon.nodes.make_room(name=room_name, parent_id=parent_id, inherit_perms=False, admin_ids=[user_info.userInfo.id]) # type: ignore
         if admin_user and parent_id == 0:
             user_info = await find_user_by_username(dracoon=dracoon, user_name=admin_user)
-            payload = dracoon.nodes.make_room(name=room_name, inherit_perms=False, admin_ids=[user_info.id], parent_id=None)
+            payload = dracoon.nodes.make_room(name=room_name, inherit_perms=False, admin_ids=[user_info.id], parent_id=None) # type: ignore
         else:
             payload = dracoon.nodes.make_room(
             name=room_name, parent_id=parent_id, inherit_perms=True
@@ -612,14 +614,12 @@ def ls(
 
         # remove base url from path
         parsed_path = parse_path(full_path=source_path)
-
-        if parsed_path != "/":
-            parent_node = await dracoon.nodes.get_node_from_path(path=parsed_path)
-        elif parsed_path == "/":
+      
+        if parsed_path == "/":
             parent_node = None
             parent_id = 0
-
-        if parent_node:
+        else:
+            parent_node = await dracoon.nodes.get_node_from_path(path=parsed_path)
             parent_id = parent_node.id
 
         if parent_node is None and parsed_path != "/":
@@ -721,9 +721,13 @@ def ls(
                     )
                     sys.exit(1)
 
-        if long_list and parent_id != 0 and human_readable:
-            typer.echo(f"total {to_readable_size(parent_node.size)}")
-        elif long_list and parent_id != 0:
+        if long_list and parent_node is not None and human_readable:
+            if parent_node.size:
+                size = parent_node.size
+            else:
+                size = 0
+            typer.echo(f"total {to_readable_size(size)}")
+        elif long_list and parent_node is not None:
             typer.echo(f"total {parent_node.size}")
 
         for node in nodes.items:
@@ -861,7 +865,11 @@ def download(
             finally:
                 await dracoon.logout()
         elif is_file_path:
-            transfer = DCTransferList(total=node_info.size, file_count=1)
+            if node_info.size:
+                size = node_info.size
+            else:
+                size = 0
+            transfer = DCTransferList(total=size, file_count=1)
             download_job = DCTransfer(transfer=transfer)
 
             try:
