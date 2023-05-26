@@ -244,7 +244,6 @@ async def create_folder_struct(source: str, target: str, dracoon: DRACOON, veloc
             # process 3 batches in parallel per level
             for batch in dracoon.batch_process(coro_list=folder_reqs, batch_size=3):
                 try:
-                    await dracoon.connect(connection_type=OAuth2ConnectionType.refresh_token)
                     await asyncio.gather(*batch)
                 except DRACOONHttpError:
                     for req in folder_reqs:
