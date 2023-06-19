@@ -176,11 +176,7 @@ def is_win32() -> bool:
 async def create_folder_struct(source: str, target: str, dracoon: DRACOON, velocity: int = 2):
     """create all necessary folders for a recursive folder upload"""
 
-    if velocity > 10:
-        velocity = 10
-    elif velocity < 1:
-        velocity = 1
-
+    velocity = max(1, min(velocity, 10)) # refactor to one line
     async def process_batch(batch):
         """process a batch of folders to create"""
 
@@ -273,10 +269,7 @@ async def bulk_upload(
     file_list.sort_by_size()
     transfer_list = DCTransferList(total=file_list.total_size, file_count=file_list.file_count)
 
-    if velocity > 10:
-        velocity = 10
-    elif velocity < 1:
-        velocity = 1
+    velocity = max(1, min(velocity, 10))
 
     concurrent_reqs = velocity * 5
 
@@ -294,6 +287,7 @@ async def bulk_upload(
             callback_fn=upload_job.update
         )
         upload_reqs.append(asyncio.ensure_future(req))
+
 
     for batch in dracoon.batch_process(
             coro_list=upload_reqs, batch_size=concurrent_reqs
