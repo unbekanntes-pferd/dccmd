@@ -4,7 +4,7 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 
 # std imports
 import sys
