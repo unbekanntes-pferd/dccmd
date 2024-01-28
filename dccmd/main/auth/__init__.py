@@ -39,7 +39,7 @@ def rm(
     """removes auth token(refresh token) for OAuth2 authentication in DRACOON"""
 
     base_url = parse_base_url(full_path=f"{base_url}/")
-    creds = get_credentials(base_url)
+    creds = get_credentials(base_url, cli_mode)
     crypto = get_crypto_credentials(base_url)
 
     if not creds:

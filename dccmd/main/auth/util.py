@@ -78,7 +78,7 @@ async def login(
     # password flow
     if cli_mode:
         try:
-            dracoon = await _login_password_flow(base_url, dracoon, username, password)
+            dracoon = await _login_password_flow(base_url, dracoon, username, password, cli_mode)
         except HTTPUnauthorizedError:
             await graceful_exit(dracoon=dracoon)
             typer.echo(format_error_message(msg='Wrong username/password.'))
@@ -130,7 +130,7 @@ async def init_dracoon(
         sys.exit(1)
 
     # get stored credentials
-    refresh_token = get_credentials(base_url)
+    refresh_token = get_credentials(base_url, cli_mode)
 
     # log in
     dracoon = await login(
@@ -146,7 +146,7 @@ async def init_dracoon(
 
 
 async def _login_password_flow(
-    base_url: str, dracoon: DRACOON, username: str, password: str
+    base_url: str, dracoon: DRACOON, username: str, password: str, cli_mode: bool
 ) -> DRACOON:
 
     if username is None or password is None:
@@ -174,12 +174,14 @@ async def _login_password_flow(
         await graceful_exit(dracoon=dracoon)
         typer.echo(format_error_message(msg="Login failed."))
 
+    if not cli_mode:
+        save_creds = typer.confirm("Save credentials?", abort=False, default=True)
+    else:
+        save_creds = False
 
-    save_creds = typer.confirm("Save credentials?", abort=False, default=True)
-
-    if save_creds:
+    if save_creds or cli_mode:
         store_credentials(
-            base_url=base_url, refresh_token=dracoon.client.connection.refresh_token
+            base_url=base_url, refresh_token=dracoon.client.connection.refresh_token, cli_mode=cli_mode
         )
 
     return dracoon

@@ -42,6 +42,8 @@ async def init_keypair(dracoon: DRACOON, base_url: str, cli_mode: bool, crypto_s
             save_creds = typer.confirm(
                     "Save credentials?", abort=False, default=True
                 )
+        else:
+            save_creds = False
 
         await get_keypair(dracoon=dracoon, crypto_secret=crypto_secret)
 

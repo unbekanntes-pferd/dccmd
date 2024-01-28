@@ -27,10 +27,30 @@ def load_config() -> configparser.ConfigParser:
     config.read(CONFIG_PATH)
     return config
 
+def are_credentials_stored(base_url: str) -> bool:
+    config = load_config()
+    has_base_url = base_url in config
+    if has_base_url:
+        has_token = TOKEN_NAME in config[base_url]
+    else: 
+        has_token = False
+
+    return has_token
+
+def are_crypto_credentials_stored(base_url: str) -> bool:
+    config = load_config()
+    has_base_url = base_url in config
+    if has_base_url:
+        has_crypto = ENCRYPTION_NAME in config[base_url]
+    else: 
+        has_crypto = False
+
+    return has_crypto   
+
 def store_credentials(base_url: str, refresh_token: str, cli_mode: bool):
     """store refresh token for given DRACOON url"""
     if cli_mode:
-        if typer.confirm("Store credentials as insecure config file?", default=False):
+        if not are_credentials_stored(base_url=base_url) and typer.confirm("Store credentials as insecure config file?", default=False):
             store_credentials_insecure(base_url=base_url, refresh_token=refresh_token)
     else:
         keyring.set_password(SERVICE_NAME, base_url, refresh_token)
@@ -73,7 +93,7 @@ def delete_credentials_insecure(base_url: str):
 def store_crypto_credentials(base_url: str, crypto_secret: str, cli_mode: bool):
     """store encryption password for given DRACOON url"""
     if cli_mode:
-        if typer.confirm("Store encryption secret as insecure config file?", default=False):
+        if not are_crypto_credentials_stored(base_url=base_url) and typer.confirm("Store encryption secret as insecure config file?", default=False):
            store_crypto_credentials_insecure(base_url=base_url, crypto_secret=crypto_secret)
     else:
         keyring.set_password(SERVICE_NAME, base_url + "-crypto", crypto_secret)
@@ -135,10 +155,10 @@ def store_client_credentials_insecure(base_url: str, client_id: str, client_secr
 def get_client_credentials(base_url: str, cli_mode: bool) -> tuple[str, str]:
     """store client credentials (client id and secret) for given DRACOON url"""
     if cli_mode:
-        creds = keyring.get_password(SERVICE_NAME, base_url + "-client")
-    else:
         creds = get_client_credentials_insecure(base_url=base_url)
-
+    else:
+        creds = keyring.get_password(SERVICE_NAME, base_url + "-client")
+        
     return parse_client_credentials(creds)
 
 def get_client_credentials_insecure(base_url: str):
