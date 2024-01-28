@@ -46,9 +46,9 @@ async def login(
 
     # get OAuth client
     try:
-        client_id, client_secret = get_client_credentials(base_url)
+        client_id, client_secret = get_client_credentials(base_url, cli_mode)
     except DCClientParseError:
-        client_id, client_secret = await register_client(base_url)
+        client_id, client_secret = await register_client(base_url, cli_mode)
 
     # instantiate DRACOON
     log_level = logging.INFO
@@ -203,14 +203,14 @@ async def _login_prompt(base_url: str, dracoon: DRACOON) -> DRACOON:
 
     if save_creds:
         store_credentials(
-            base_url=base_url, refresh_token=dracoon.client.connection.refresh_token
+            base_url=base_url, refresh_token=dracoon.client.connection.refresh_token, cli_mode=False
         )
 
     return dracoon
 
 
 async def _login_refresh_token(
-    base_url: str, dracoon: DRACOON, refresh_token: str
+    base_url: str, dracoon: DRACOON, refresh_token: str, cli_mode: bool
 ) -> DRACOON:
     
     try:
@@ -229,16 +229,16 @@ async def _login_refresh_token(
                     msg="Invalid client configuration: client removed."
                 )
             )
-            delete_client_credentials(base_url)
+            delete_client_credentials(base_url, cli_mode)
             raise typer.Abort()
         else:
-            delete_credentials(base_url=base_url)
+            delete_credentials(base_url=base_url, cli_mode=cli_mode)
             typer.echo(format_error_message(msg="Refresh token expired."))
     except HTTPBadRequestError as err:
         await graceful_exit(dracoon=dracoon)
         err_body = err.error.response.json()
         if "error" in err_body and err_body["error"] == "invalid_grant":
-            delete_credentials(base_url=base_url)
+            delete_credentials(base_url=base_url, cli_mode=cli_mode)
             typer.echo(format_error_message(msg="Refresh token expired."))
             await _login_prompt(base_url=base_url, dracoon=dracoon)
 
@@ -269,7 +269,7 @@ async def is_dracoon_url(base_url: str) -> bool:
 
     return True
 
-async def register_client(base_url: str):
+async def register_client(base_url: str, cli_mode: bool):
     """register client (OAuth2)"""
 
     base_url = parse_base_url(f"{base_url}/")
@@ -287,8 +287,8 @@ async def register_client(base_url: str):
 
     client_id = str(client_id).strip()
     client_secret = str(client_secret).strip()
-
-    store_client_credentials(base_url, client_id, client_secret)
+    
+    store_client_credentials(base_url, client_id, client_secret, cli_mode)
     typer.echo(
         format_success_message(
             msg=f"Stored client credentials for DRACOON url: {base_url}"
@@ -298,12 +298,12 @@ async def register_client(base_url: str):
     return client_id, client_secret
 
 
-def remove_client(base_url: str):
+def remove_client(base_url: str, cli_mode: bool):
     """remove client config from keychain"""
 
     base_url = parse_base_url(f"{base_url}/")
 
-    client_id, client_secret = get_client_credentials(base_url)
+    client_id, client_secret = get_client_credentials(base_url, cli_mode)
 
     if client_id and client_secret:
         delete_client_credentials(base_url)

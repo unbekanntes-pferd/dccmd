@@ -20,21 +20,27 @@ client_app = typer.Typer()
 
 @client_app.command()
 def register(
-    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)")
+    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)"),
+    cli_mode: bool = typer.Option(
+        False, help="When active, targets insecure config file"
+    ),
 ):
     """sets up client (client id and secret) for OAuth2 authentication in DRACOON"""
-    asyncio.run(register_client(base_url))
+    asyncio.run(register_client(base_url, cli_mode))
 
 
 @client_app.command()
 #pylint: disable=C0103
 def rm(
-    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)")
+    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)"),
+    cli_mode: bool = typer.Option(
+        False, help="When active, targets insecure config file"
+    ),
 ):
     """removes client (client id and secret) for OAuth2 authentication in DRACOON"""
 
     try:
-        remove_client(base_url)
+        remove_client(base_url, cli_mode)
     except DCClientParseError:
         typer.echo(
             format_error_message(msg=f"Client not found for DRACOON url: {base_url}.")
@@ -45,13 +51,16 @@ def rm(
 @client_app.command()
 #pylint: disable=C0103
 def ls(
-    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)")
+    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)"),
+    cli_mode: bool = typer.Option(
+        False, help="When active, targets insecure config file"
+    ),    
 ):
     """displays client (client id and secret) for OAuth2 authentication in DRACOON"""
 
     base_url = parse_base_url(f"{base_url}/")
     try:
-        client_id, client_secret = get_client_credentials(base_url)
+        client_id, client_secret = get_client_credentials(base_url, cli_mode)
     except DCClientParseError:
         typer.echo(
             format_error_message(msg=f"Client not found for DRACOON url: {base_url}")

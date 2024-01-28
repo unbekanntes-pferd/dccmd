@@ -1,8 +1,0 @@
-{
-    "python.linting.pylintEnabled": true,
-    "python.linting.enabled": true,
-    "python.formatting.provider": "black",
-    "python.linting.mypyEnabled": false,
-    "esbonio.sphinx.confDir": "",
-    "python.linting.flake8Enabled": false
-}
