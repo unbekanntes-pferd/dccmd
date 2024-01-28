@@ -26,11 +26,14 @@ crypto_app = typer.Typer()
 @crypto_app.command()
 #pylint: disable=C0103
 def ls(
-    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)")
+    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)"),
+    cli_mode: bool = typer.Option(
+        False, help="When active, targets insecure config file"
+    ),  
 ):
     """displays if encryption password is stored for DRACOON url"""
     base_url = parse_base_url(full_path=f"{base_url}/")
-    crypto = get_crypto_credentials(base_url)
+    crypto = get_crypto_credentials(base_url, cli_mode)
 
     if not crypto:
         typer.echo(
@@ -46,12 +49,15 @@ def ls(
 @crypto_app.command()
 #pylint: disable=C0103
 def rm(
-    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)")
+    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)"),
+    cli_mode: bool = typer.Option(
+        False, help="When active, targets insecure config file"
+    ),
 ):
     """removes encryption password for given DRACOON url"""
 
     base_url = parse_base_url(full_path=f"{base_url}/")
-    crypto = get_crypto_credentials(base_url)
+    crypto = get_crypto_credentials(base_url, cli_mode)
 
     if not crypto:
         typer.echo(
@@ -61,7 +67,7 @@ def rm(
         )
         sys.exit(1)
 
-    delete_crypto_credentials(base_url)
+    delete_crypto_credentials(base_url, cli_mode)
 
     typer.echo(
         format_success_message(msg=f"Encryption password removed for {base_url}")
@@ -86,6 +92,9 @@ def distribute(
     password: str = typer.Argument(
         None, help="Password to log in to DRACOON - only works with active cli mode"
     ),
+    encryption_password: str = typer.Argument(
+        None, help="Encryption password in DRACOON - only works with active cli mode"
+    ),
 ):
     """ Distribute missing file keys if available """
     async def _distribute_keys():
@@ -97,8 +106,12 @@ def distribute(
             cli_mode=cli_mode,
             debug=debug,
         )
-
-        crypto_secret = get_crypto_credentials(base_url)
+        if cli_mode:
+            crypto_secret = encryption_password
+            if not crypto_secret:
+                crypto_secret = get_crypto_credentials(base_url=base_url, cli_mode=cli_mode)
+        else:
+            crypto_secret = get_crypto_credentials(base_url, cli_mode=cli_mode)
         await init_keypair(dracoon=dracoon, base_url=base_url, crypto_secret=crypto_secret)
 
         # remove base url from path

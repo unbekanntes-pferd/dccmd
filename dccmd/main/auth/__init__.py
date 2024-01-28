@@ -31,19 +31,22 @@ auth_app = typer.Typer()
 @auth_app.command()
 #pylint: disable=C0103
 def rm(
-    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)")
+    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)"),
+    cli_mode: bool = typer.Option(
+        False, help="When active, targets insecure config file"
+    ),
 ):
     """removes auth token(refresh token) for OAuth2 authentication in DRACOON"""
 
     base_url = parse_base_url(full_path=f"{base_url}/")
-    creds = get_credentials(base_url)
+    creds = get_credentials(base_url, cli_mode)
     crypto = get_crypto_credentials(base_url)
 
     if not creds:
         typer.echo(format_error_message(msg=f"No token stored DRACOON url: {base_url}"))
         sys.exit(1)
 
-    delete_credentials(base_url)
+    delete_credentials(base_url, cli_mode)
 
     if crypto:
         delete_crypto_credentials(base_url)
@@ -56,15 +59,17 @@ def rm(
 @auth_app.command()
 #pylint: disable=C0103
 def ls(
-    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)")
+    base_url: str = typer.Argument(..., help="Base DRACOON url (example: dracoon.team)"),
+    cli_mode: bool = typer.Option(
+        False, help="When active, targets insecure config file"
+    ),
 ):
     """displays auth info for OAuth2 authentication in DRACOON"""
 
     async def _ls():
-
         parsed_base_url = parse_base_url(full_path=f"{base_url}/")
-        refresh_token = get_credentials(parsed_base_url)
-        crypto_creds = get_crypto_credentials(parsed_base_url)
+        refresh_token = get_credentials(parsed_base_url, cli_mode)
+        crypto_creds = get_crypto_credentials(parsed_base_url, cli_mode)
 
         if not refresh_token:
             typer.echo(

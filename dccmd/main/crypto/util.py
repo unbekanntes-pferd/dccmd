@@ -32,22 +32,24 @@ async def get_keypair(dracoon: DRACOON, crypto_secret: str):
         typer.echo(format_error_message(msg="An error ocurred getting the keypair."))
         sys.exit(1)
 
-async def init_keypair(dracoon: DRACOON, base_url: str, crypto_secret: str = None):
+async def init_keypair(dracoon: DRACOON, base_url: str, cli_mode: bool, crypto_secret: str = None):
     """ handle keypair storage """
     if not crypto_secret:
-
         crypto_secret = typer.prompt(
                     "Enter encryption password: ", hide_input=True
                 )
-        save_creds = typer.confirm(
+        if not cli_mode:
+            save_creds = typer.confirm(
                     "Save credentials?", abort=False, default=True
                 )
+        else:
+            save_creds = False
 
         await get_keypair(dracoon=dracoon, crypto_secret=crypto_secret)
 
-        if save_creds:
+        if save_creds or cli_mode:
             store_crypto_credentials(
-                        base_url=base_url, crypto_secret=crypto_secret
+                        base_url=base_url, crypto_secret=crypto_secret, cli_mode=cli_mode
                     )
 
     await get_keypair(dracoon=dracoon, crypto_secret=crypto_secret)

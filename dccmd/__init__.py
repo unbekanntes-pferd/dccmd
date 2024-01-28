@@ -4,7 +4,7 @@ A CLI DRACOON client
 
 """
 
-__version__ = "0.4.3"
+__version__ = "0.5.0"
 
 # std imports
 import sys
@@ -100,6 +100,9 @@ def upload(
     password: str = typer.Argument(
         None, help="Password to log in to DRACOON - only works with active cli mode"
     ),
+    encryption_password: str = typer.Argument(
+        None, help="Encryption password in use in DRACOON - only works with active cli mode"
+    )
 ):
     """Upload a file or folder into DRACOON """
 
@@ -125,9 +128,14 @@ def upload(
             sys.exit(1)
 
         if node_info.isEncrypted is True:
-            crypto_secret = get_crypto_credentials(base_url)
+            if cli_mode:
+                crypto_secret = get_crypto_credentials(base_url=base_url, cli_mode=cli_mode)
+                if not crypto_secret:
+                    crypto_secret = encryption_password
+            else:
+                crypto_secret = get_crypto_credentials(base_url, cli_mode)
             await init_keypair(
-                dracoon=dracoon, base_url=base_url, crypto_secret=crypto_secret
+                dracoon=dracoon, base_url=base_url, cli_mode=cli_mode, crypto_secret=crypto_secret
             )
 
         is_folder = is_directory(folder_path=source_dir_path)
@@ -772,6 +780,9 @@ def download(
     password: str = typer.Argument(
         None, help="Password to log in to DRACOON - only works with active cli mode"
     ),
+    encryption_password: str = typer.Argument(
+        None, help="Encryption password in use in DRACOON - only works with active cli mode"
+    )
 ):
     """
     Download a file, folder or room from DRACOON 
@@ -803,9 +814,14 @@ def download(
 
         if node_info and node_info.isEncrypted is True:
 
-            crypto_secret = get_crypto_credentials(base_url)
+            if cli_mode:
+                crypto_secret = get_crypto_credentials(base_url=base_url, cli_mode=cli_mode)
+                if not crypto_secret:
+                    crypto_secret = encryption_password
+            else:
+                crypto_secret = get_crypto_credentials(base_url, cli_mode=cli_mode)
             await init_keypair(
-                dracoon=dracoon, base_url=base_url, crypto_secret=crypto_secret
+                dracoon=dracoon, base_url=base_url, cli_mode=cli_mode, crypto_secret=crypto_secret
             )
         
         is_container = node_info.type == NodeType.folder or node_info.type == NodeType.room
