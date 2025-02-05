@@ -1,5 +1,11 @@
 <h1 align="center">DRACOON Commander</h1>
 
+<div style="background-color: #fff3cd; border-left: 4px solid #f1c40f; padding: 1em; border-radius: 4px; margin: 1em 0;">
+  <strong>⚠️ This project is archived</strong>
+  <p>This project does no longer receive any updates. If you are looking for a CLI tool for DRACOON with similar capabilities, use `dccmd-rs`.</p>
+   Check out <a href="https://github.com/unbekanntes-pferd/dccmd-rs" target="_blank" rel="noopener noreferrer">dccmd-rs</a>.
+</div>
+
 
 ## Table of Contents
 
